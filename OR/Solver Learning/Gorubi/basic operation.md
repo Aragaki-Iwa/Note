@@ -1,11 +1,11 @@
 ## 高级操作
-1.callback
-    在求解过程中需要实现一些功能，如获取信息、终止优化、cut、嵌入自己的算法等。
-2.常用的线性化方法
-    max/min objective function
-    带fixed cost obj --分段式obj
-    逻辑
-    partial integer variable
+1.callback  
+    在求解过程中需要实现一些功能，如获取信息、终止优化、cut、嵌入自己的算法等。  
+2.常用的线性化方法  
+    max/min objective function  
+    带fixed cost obj --分段式obj  
+    逻辑  
+    partial integer variable  
 ---------
 Callback函数
 
