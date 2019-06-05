@@ -1,0 +1,9 @@
+Good and bad formulation
+通常，IP的建模灵活度要比LP高，即对同一问题，有多种方式来建立IP，所以各种方式有优劣之分，而这种优劣也并非是绝对的，需要与问题特性，并结合求解算法来区分。
+一种formulation不好时，可以reformulation。
+如何评判formulation的好坏？
+variable / constraints
+1.model中variable的数量
+    变量多不一定是坏事，关键要有用。运用分支定界时，有时候可以通过引入额外的0-1变量来优化分支过程
+    一种是引入0-1来表达额外的约束；
+    一种是在约束中显式表达松弛变量(仅由整数变量组成)，并将其本身指定为整数。$$sum_j{a_jx_j leq b}$$
