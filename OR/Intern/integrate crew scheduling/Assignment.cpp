@@ -9,13 +9,19 @@ Solution::Solution(const int numRow, const int numColumn) {
 	for (size_t i = 0; i < numRow; i++) {
 		CrewDutyMatrix[i].resize(numColumn);
 	}	
+
+	//adj
+	CrewDutyAdj.clear();
+	DutyCrewAdj.clear();
+	CrewDutyAdj.resize(numRow);
+	DutyCrewAdj.resize(numColumn);
 }
 
 int Assigner::solve() {	
 	//initialization
-	initFlyMint();	
-	initCrewDutyColumn();
-	initMatrixs();
+	initFlyMints();
+	clusterDutyByDay();
+
 	//optimization
 	//initialSolution();
 	//initialSolution_basedCrew();
@@ -23,7 +29,9 @@ int Assigner::solve() {
 	
 	calObjValue(*_initialSoln);
 
-	_optSoln = _initialSoln;
+
+	_optSoln = new Solution(*_initialSoln);
+	delete _initialSoln;
 	postProcess();
 
 	std::cout << "opt solution's uncovered flt: " << _optSoln->obj.fltCancelCost << "\n";
@@ -34,7 +42,7 @@ int Assigner::solve() {
 	return 1;
 }
 /*public, for init*/
-void Assigner::init(std::vector<CREW*>* p_crewSet, CrewRules* p_rules,
+void Assigner::init(std::vector<CREW*>* p_crewSet, CrewRules* p_rules, std::vector<std::vector<int>>* p_crewMutualMatrix,
 	std::vector<CREW*>* p_curCAPCrewSet,
 	std::vector<CREW*>* p_curFOCrewSet,
 	std::vector<CREW*>* p_curAttendantCrewSet) {
@@ -44,12 +52,11 @@ void Assigner::init(std::vector<CREW*>* p_crewSet, CrewRules* p_rules,
 	_curFOCrewSet = p_curFOCrewSet;
 	_curAttendantCrewSet = p_curAttendantCrewSet;
 
+	_crewMutualMatrix = *p_crewMutualMatrix;
 }
-void Assigner::receiveInput(std::vector<Path*>* p_decidedDutySet, std::vector<Node*>* p_curSegNodeSet) {
-	
+void Assigner::receiveSetCoverInput(std::vector<Path*>* p_decidedDutySet, std::vector<Node*>* p_curSegNodeSet) {	
 	_decidedDutySet = p_decidedDutySet;	
-	_curSegNodeSet = p_curSegNodeSet;
-	
+	_curSegNodeSet = p_curSegNodeSet;	
 }
 void Assigner::labelDecidedDuty(std::vector<string>& specialAirport) {
 	int duty_size = _decidedDutySet->size();
@@ -78,54 +85,60 @@ void Assigner::labelDecidedDuty(std::vector<string>& specialAirport) {
 }
 
 /*private*/
+//整个指派执行一次即可
 void Assigner::clusterDutyByDay() {	
-	//std::sort(_decidedDutySet->begin(), _decidedDutySet->end()
-	//	, [](const Path* a, const Path* b) {return a->startDtLoc > b->startDtLoc; });//按开始时间升序排序	
-	////找到first和last day，进而得到_decidedDutySet包含有几天的duty
-	//time_t first_day = getStartTimeOfDay(_decidedDutySet->front()->startDtLoc);
-	//time_t last_day = getStartTimeOfDay(_decidedDutySet->back()->startDtLoc);
-	//int num_days = (last_day - first_day) / (24 * 3600) + 1;
-	////_decidedDutySet中的duty可分为num_days天
-	//_decidedDutyInDays.resize(num_days);
-	//Path* duty;
-	//time_t duty_startDay;
-	//for (int d = 0; d < _decidedDutySet->size(); d++) {
-	//	duty = (*_decidedDutySet)[d];
-	//	duty_startDay = getStartTimeOfDay(duty->startDtLoc);
-	//}
+	//对_decidedDutySet按执勤时间降序排序
+	//这样之后按天分duty也就已经排好序了
+	std::sort(_decidedDutySet->begin(), _decidedDutySet->end()
+		, [](const Path* a, const Path* b) {return a->workMin > b->workMin; });
 
-	for (const auto& duty : *_decidedDutySet) {
-		_decidedDutyInDays[duty->startDate].emplace_back(duty);
+	_decidedDutyInDaysID.clear();
+	
+	Path* duty;
+	for (int d = 0; d < _decidedDutySet->size(); d++) {
+		duty = (*_decidedDutySet)[d];
+		_decidedDutyInDaysID[duty->startDate].emplace_back(d); //存放的是index
 	}
-	//各天的duty分别按执勤时长降序排序
-	for (auto& day_dutySet : _decidedDutyInDays) {
-		std::sort(day_dutySet.second.begin(), day_dutySet.second.end()
-			, [](const Path* a, const Path* b) {return a->startDtLoc > b->startDtLoc; });
-	}	
-
+		
 }
 
-void Assigner::initCrewDutyColumn(std::vector<Path*>& decidedDutys) {
+void Assigner::initFlyMints() {
+	_CrewFlyMints.clear();
+	_CrewFlyMints.reserve(_crewSet->size());
+
+	_initial_sumFlyMint = 0;
+
+	for (const auto& crew : *_crewSet) {
+		_initial_sumFlyMint += crew->workStatus->accumuFlyMin;
+		_CrewFlyMints.emplace_back(crew->workStatus->accumuFlyMin);
+	}
+}
+
+
+void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 	for (auto& crew : *_crewSet) {
 		crew->workStatus->assigned = false;
+
+		crew->workStatus->setDutyColumn(_decidedDutySet->size());
 	}
 
 	int crew_size = _crewSet->size();
-	//int duty_size = _decidedDutySet->size(); //_decidedDutySet换为decidedDutys 7-18
-	int duty_size = decidedDutys.size();
+	//int duty_size = _decidedDutySet->size();
+	int duty_size = decidedDutysID.size();
 
 	//CREW* temp_crew;
 	bool exist_feasible_duty = false;
 	for (/*int c = 0; c < crew_size; c++*/
-		auto temp_crew = _crewSet->begin(); temp_crew != _crewSet->end(); ) {
+		auto temp_crew = _crewSet->begin(); temp_crew != _crewSet->end(); temp_crew++) {
 		//temp_crew = crewSet[c];
-		(*temp_crew)->workStatus->setDutyColumn(duty_size);
+		
 		 
 		if ((*temp_crew)->workStatus->accumuCreditMin < _rules->maxCreditMin) {
-			Path* duty;			
-			for (int d = 0; d < duty_size; d++) {
-				//duty = (*_decidedDutySet)[d];
-				duty = decidedDutys[d];
+			Path* duty;
+			int d = 0;
+			for (int i = 0; i < duty_size; i++) {				
+				d = decidedDutysID[i];
+				duty = (*_decidedDutySet)[d];
 
 				if ((*temp_crew)->workStatus->restStation != "" && (*temp_crew)->workStatus->restStation != duty->startStation) {
 					//=="",说明是初次迭代，不需要满足空间接续。不过实际上crew的初始状态中是有一个计划周期开始时的所在地的信息，这里先不考虑
@@ -156,10 +169,12 @@ void Assigner::initCrewDutyColumn(std::vector<Path*>& decidedDutys) {
 		else {
 			//考虑资质：special duty只有special crew可以担当
 			Path* duty;
+			int d = 0;
 			bool exist_feasible_duty = false;
-			for (int d = 0; d < duty_size; d++) {
-				//duty = (*_decidedDutySet)[d];
-				duty = decidedDutys[d];
+			for (int i = 0; i < duty_size; i++) {				
+				d = decidedDutysID[i];
+				duty = (*_decidedDutySet)[d];
+				
 				string special = "SpecialAirport";
 				if (duty->specialCredentials[special] >= 1 &&
 					(*temp_crew)->rankAry->front()->SkillSet[special] != 1) {
@@ -167,7 +182,6 @@ void Assigner::initCrewDutyColumn(std::vector<Path*>& decidedDutys) {
 				}
 			}
 
-			temp_crew++;
 		}			
 	}
 	//sort _curCrewSet，执勤时间升序排序
@@ -175,6 +189,28 @@ void Assigner::initCrewDutyColumn(std::vector<Path*>& decidedDutys) {
 		, [](const CREW* a, const CREW* b) {return a->workStatus->accumuCreditMin < b->workStatus->accumuCreditMin; });*/
 	sortCrewSet();
 }
+void Assigner::setCrewDutyMatchAdj() {
+	_dutyCrewAdj.clear();
+	_crewDutyAdj.clear();
+	_dutyCrewAdj.shrink_to_fit();
+	_crewDutyAdj.shrink_to_fit();
+
+	int crew_size = (*_crewSet).size();
+	int duty_size = _decidedDutySet->size();
+	_dutyCrewAdj.resize(duty_size);
+	_crewDutyAdj.resize(crew_size);
+
+	for (int c = 0; c < crew_size; c++) {
+		for (int d = 0; d < duty_size; d++) {
+			if ((*_crewSet)[c]->workStatus->dutyColumn[d] == 1) {
+				_dutyCrewAdj[d].emplace_back(c);
+
+				_crewDutyAdj[c].emplace_back(d);
+			}
+		}
+	}
+}
+
 void Assigner::sortCrewSet() {
 	/*交叉从CAP 、FO出发挑选duty*/
 	_crewSet->clear();
@@ -192,58 +228,8 @@ void Assigner::sortCrewSet() {
 	while (j < _curFOCrewSet->size()) { _crewSet->emplace_back((*_curFOCrewSet)[j++]); }
 }
 
-void Assigner::initFlyMint() {
-	_initial_sumFlyMint = 0;
-	_CrewFlyMints.reserve(_crewSet->size());
-	for (const auto& crew : *_crewSet) {
-		_initial_sumFlyMint += crew->workStatus->accumuFlyMin;
-		_CrewFlyMints.emplace_back(crew->workStatus->accumuFlyMin);
-	}
-}
-void Assigner::initMatrixs() {
-	int crew_size = (*_crewSet).size();
-	int duty_size = _decidedDutySet->size();
-	
-	_crewMutualMatrix.clear();
-	_dutyCrewAdj.clear();
-	_crewDutyAdj.clear();
 
-	_crewMutualMatrix.shrink_to_fit();
-	_dutyCrewAdj.shrink_to_fit();
-	_crewDutyAdj.shrink_to_fit();
 
-	_crewMutualMatrix.resize(crew_size);
-	_dutyCrewAdj.resize(duty_size);
-	_crewDutyAdj.resize(crew_size);
-	/*crew mutual*/
-	for (int i = 0; i < crew_size; i++) {
-		_crewMutualMatrix[i].resize(crew_size, 1);
-	}
-	//set value for mutual crews	
-	for (int i = 0; i < crew_size; i++) {
-		_crewMutualMatrix[i][i] = 0; //diagonal = 0
-		for (int j = 0; j < crew_size; j++) {
-			if ((*_crewSet)[i]->rankAry->front()->rank == (*_crewSet)[j]->rankAry->front()->rank) {
-				_crewMutualMatrix[i][j] = 0; //same rank
-			}
-			else if (!isRankMatch((*_crewSet)[i]->rankAry->front(), (*_crewSet)[j]->rankAry->front())) {
-				_crewMutualMatrix[i][j] = 0; //rank combination mutual
-			}
-		}
-	}
-
-	/*duty-crewSet*/ //adjective table
-	for (int c = 0; c < crew_size; c++) {
-		for (int d = 0; d < duty_size; d++) {
-			if ((*_crewSet)[c]->workStatus->dutyColumn[d] == 1) {
-				_dutyCrewAdj[d].emplace_back(c);
-
-				_crewDutyAdj[c].emplace_back(d);
-			}
-		}
-	}
-
-}
 
 /*----------algorithm-process----------*/
 
@@ -319,7 +305,7 @@ void Assigner::initialSolution() {
 		
 		//check if all node in _curSegNodeSet were assigned		
 		finished = true;
-		finished = stop();
+		finished = isCurSegCoverFinished();
 		
 		d++;
 		if (d == 80 || d == 95 || d == 100) {
@@ -405,7 +391,7 @@ int Assigner::initialSolution_basedCrew() {
 			c++;
 		}
 		//check stop
-		finished = stop();
+		finished = isCurSegCoverFinished();
 	} while (c < crew_size && !finished);
 	//感觉这样可能比较慢，因为是duty数基本是少于crew数。所以从CAP和FO交叉出发，选择duty
 
@@ -426,16 +412,21 @@ int Assigner::initialSolution_basedCrew() {
 	return 0;
 }
 void Assigner::initialSolution_baseCrewAndDay() {
-	clusterDutyByDay();
 	int crew_size = _crewSet->size();
-	for (auto& day_duty : _decidedDutyInDays) {
-		auto curDecidedDutys = day_duty.second;
+	int total_duty_size = _decidedDutySet->size();
+	_initialSoln = new Solution(crew_size, total_duty_size);
+	/*_initialSoln->CrewDutyAdj.resize(crew_size);
+	_initialSoln->DutyCrewAdj.resize(total_duty_size);*/
+
+	for (auto& day_dutyIDs : _decidedDutyInDaysID) {
+		auto curDecidedDutys = day_dutyIDs.second;
 		initCrewDutyColumn(curDecidedDutys); //每天都需要初始化crew的状态：assign=false，更新dutyColumn
-		
+		setCrewDutyMatchAdj();
+
 		int duty_size = curDecidedDutys.size();
-		_initialSoln = new Solution(crew_size, duty_size);
-		_initialSoln->CrewDutyAdj.resize(crew_size);
-		_initialSoln->DutyCrewAdj.resize(duty_size);
+		//Solution day_soln(crew_size, duty_size); //每天的解，求完每天的解，最后汇总得到当前迭代的解
+		//day_soln.CrewDutyAdj.resize(crew_size);
+		//day_soln.DutyCrewAdj.resize(duty_size);
 
 		bool finished = true;
 		int c = 0;
@@ -446,8 +437,9 @@ void Assigner::initialSolution_baseCrewAndDay() {
 		do {
 			crew = (*_crewSet)[c];
 			duty_size = _crewDutyAdj[c].size();
-			for (int d = 0; d < duty_size; d++) {
-				duty = curDecidedDutys[d];
+			for (int i = 0; i < duty_size; i++) {
+				d = curDecidedDutys[i];
+				duty = (*_decidedDutySet)[d];
 				
 				if (duty->startDtLoc - crew->workStatus->endDtLoc < _rules->horizon_rules->minOutRestMin) { //两个duty之间的间隔
 					continue;
@@ -492,38 +484,37 @@ void Assigner::initialSolution_baseCrewAndDay() {
 			while (c < crew_size && (*_crewSet)[c]->workStatus->assigned == true) {
 				c++;
 			}
-			//check stop
-			finished = stop();
+			//check single day stop,当天所有的duty是否安排完（未覆盖也算安排）
+			for (const auto& dutyID : curDecidedDutys) {				
+				if ((*_decidedDutySet)[dutyID]->crewID.size() < 2) {
+					finished = false;
+					break; 
+				}
+			}
+
 		} while (c < crew_size && !finished);
 		//感觉这样可能比较慢，因为是duty数基本是少于crew数。所以从CAP和FO交叉出发，选择duty
 
-		if (finished == false) {
-			//debug
-			_uncoveredFltFile = to_string(duty_size) + _uncoveredFltFile;
-			_outStream.open(_uncoveredFltFile);
-			int dd = 0;
-			for (const auto& node : *_curSegNodeSet) {
-				if (node->assigned == false) {
-					_outStream << _fltParser.toCsv(_fltParser.getDefaultHeaders(), node->segment) << "\n";
-				}
-			}
-			_outStream.close();
-		}
+	}
 
+	if (isCurSegCoverFinished() == false) {
+		//debug
+		_uncoveredFltFile = to_string(total_duty_size) + _uncoveredFltFile;
+		_outStream.open(_uncoveredFltFile);
+		int dd = 0;
+		for (const auto& node : *_curSegNodeSet) {
+			if (node->assigned == false) {
+				_outStream << _fltParser.toCsv(_fltParser.getDefaultHeaders(), node->segment) << "\n";
+			}
+		}
+		_outStream.close();
 	}
 
 }
 
 
 
-bool Assigner::isRankMatch(CREW_RANK* cap, CREW_RANK* fo) {
-	std::string combination;
-	if (cap->rank == "CAP") { combination = cap->position + "-" + fo->position; }
-	else if (cap->rank == "FO") { combination = fo->position + "-" + cap->position; }
-		
-	return _rules->rankCombinationSet.find(combination) != _rules->rankCombinationSet.end();
-}
-bool Assigner::stop() {
+bool Assigner::isCurSegCoverFinished() {
 	for (const auto& node : *_curSegNodeSet) {
 		if (node->assigned == false) {
 			return false;
