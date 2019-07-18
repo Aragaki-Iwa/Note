@@ -35,13 +35,15 @@ public:
 	int solve();
 
 	/*----------pre-process----------*/	
-	//只需要初始化一次的变量
-	void init(std::vector<CREW*>* p_crewSet, CrewRules* p_rules,
+	//整个求解过程只需要初始化一次的变量
+	void init(std::vector<CREW*>* p_crewSet, CrewRules* p_rules, std::vector<std::vector<int>>* crewMutualMatrix,
 		std::vector<CREW*>* p_curCAPCrewSet,
 		std::vector<CREW*>* p_curFOCrewSet,
 		std::vector<CREW*>* p_curAttendantCrewSet);
+	
 	//得到set covering求解所得的dutySet
-	void receiveInput(std::vector<Path*>* p_decidedDutySet, std::vector<Node*>* p_curSegNodeSet);
+	//整个单次assign过程只需执行一次
+	void receiveSetCoverInput(std::vector<Path*>* p_decidedDutySet, std::vector<Node*>* p_curSegNodeSet);
 	void labelDecidedDuty(std::vector<string>& specialAirport);		
 
 	
@@ -53,14 +55,25 @@ public:
 	void clear();
 
 private:		
-	void clusterDutyByDay();
-	//检查crew的各种累计工作时间，分组
-	void initCrewDutyColumn(std::vector<Path*>& decidedDutys);
-	void sortCrewSet();
 	//计算还未做决策前的初始总飞时
-	void initFlyMint();
-	void initMatrixs();
+	//整个单次assign过程只需执行一次
+	void initFlyMints();
+	//整个单次assign过程只需执行一次
+	//执行完labelDecidedDuty后执行该函数
+	void clusterDutyByDay();
+	
 
+
+	//为crew寻找（当天）能担当的duty
+	//按天执行
+	void initCrewDutyColumn(std::vector<int>& decidedDutysID);	
+	//initCrewDutyColumn后，根据crew.dutyColumn赋值
+	void setCrewDutyMatchAdj();
+
+	//每进行一次完整指派，就可以对crewSet排序。在不断搜索解的时候可能会频繁调用
+	void sortCrewSet();
+	
+	
 
 	/*----------algorithm-process----------*/
 	void initialSolution(); //based duty
@@ -69,9 +82,8 @@ private:
 	void initialSolution_baseCrewAndDay();
 	
 	
-	bool isRankMatch(CREW_RANK* cap, CREW_RANK* fo);
-	//单次解的搜索完成
-	bool stop();
+		
+	bool isCurSegCoverFinished();
 	
 	void calObjValue(Solution& solution);
 	//根据对应的solution，更新_CrewFlyMints。为中间量，计算objvalue时调用
@@ -96,7 +108,12 @@ private:
 
 	//input
 	CrewRules* _rules;
+	std::vector<std::vector<int>> _crewMutualMatrix; //index i,j is crew index in _curCrewSet 
 	std::vector<CREW*>* _crewSet;
+	std::vector<CREW*>* _curCAPCrewSet;
+	std::vector<CREW*>* _curFOCrewSet;
+	std::vector<CREW*>* _curAttendantCrewSet;
+
 	std::vector<Node*>* _curSegNodeSet;
 	std::vector<Path*>* _decidedDutySet;
 	//output
@@ -106,16 +123,14 @@ private:
 	int _initial_sumFlyMint; //包括需要day off的crew的飞时
 	/*std::vector<CREW*> _curDayOffCrewSet;
 	std::vector<CREW*> _curCrewSet;	*/
+	
 	std::vector<int> _CrewFlyMints; //_crweSet中crew（包括day off的crew）的flyMint。对应于每个解而变化  
 
-	std::vector<CREW*>* _curCAPCrewSet;
-	std::vector<CREW*>* _curFOCrewSet;
-	std::vector<CREW*>* _curAttendantCrewSet;
 
 	//std::vector<std::vector<Path*>> _decidedDutyInDays;
-	std::map<string, std::vector<Path*>> _decidedDutyInDays;
+	std::map<string, std::vector<int>> _decidedDutyInDaysID; //存储的是duty在_decidedDutySet中的index
 
-	std::vector<std::vector<int>> _crewMutualMatrix; //index i,j is crew index in _curCrewSet 
+	
 	std::vector<std::vector<int>> _dutyCrewAdj; //index d,c are duty index in _decidedDutySet and crew index in _curCrewSet
 	std::vector<std::vector<int>> _crewDutyAdj; //和_dutyCrewAdj互为转置
 

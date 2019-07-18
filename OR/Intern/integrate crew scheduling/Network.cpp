@@ -435,6 +435,8 @@ void Network::renewResourceTime() {
 	firstDay = getStartTimeOfDay(firstDay);
 	resource->startDtUtc = firstDay;
 	resource->endDtUtc = firstDay;
+	resource->startDtLoc = firstDay;
+	resource->endDtLoc = firstDay;
 }
 
 void Network::createFirstDayArcs() {

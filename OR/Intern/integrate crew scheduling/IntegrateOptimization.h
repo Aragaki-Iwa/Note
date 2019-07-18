@@ -30,6 +30,9 @@ public:
 
 private:
 	void clusterCrewMeb();
+	//整个求解只需要一次
+	void initMutrualMatrix();
+	bool isRankMatch(CREW_RANK* cap, CREW_RANK* fo);
 	void initialStartNodeSet();
 	void removeDhdDuty(std::vector<Path*>& dutySet);
 	void updateStartNodeSet(int iterDay);
@@ -56,6 +59,7 @@ private:
 	
 	Network* _net;
 	CrewRules* _rules;
+	std::vector<std::vector<int>> _crewMutualMatrix; //index i,j is crew index in _curCrewSet
 	
 	InputHandler _inputHandler;
 	PathFinder _pathFinder;

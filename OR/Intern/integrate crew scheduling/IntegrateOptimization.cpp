@@ -3,15 +3,28 @@
 void RollingOpt::optimize() {
 	
 	_net->createNetwork(_segSet, _baseSet, *_rules);
+	Node* resource = _net->nodeSet->front();
+	for (auto& crew : _crewSet) {
+		crew->workStatus->endDtLoc = resource->startDtLoc;
+	}
+
+
 	std::cout << "----------create Network finished----------\n";
+	initMutrualMatrix();
 
 	initialStartNodeSet();
-	_assigner.init(&_crewSet, _rules, &_curCAPCrewSet, &_curFOCrewSet, &_curAttendantCrewSet);
+	_assigner.init(&_crewSet, _rules, &_crewMutualMatrix, &_curCAPCrewSet, &_curFOCrewSet, &_curAttendantCrewSet);
 
+	std::vector<Node*> coveredNodes;
 	int num_iter = 1;
 	try {
 		while (!termination() && num_iter <= 11) {
 			std::cout << "----------" << num_iter << "th iter started----------\n";
+			if (num_iter == 11) {
+				int yyy = 7;
+			}
+			
+			
 			/*enumerate duty*/
 			_pathFinder.findPathSet(_net, _cur_start_nodeSet, *_rules);
 			_cur_dutySet = *_pathFinder.getPathSet();//此处注意pathFinder中pathSet的内存释放
@@ -27,37 +40,25 @@ void RollingOpt::optimize() {
 			
 			/*assignment*/
 			_cur_dutySet = *_dutyModel.getDecidedDutySet();
-			
-		
 			std::vector<Node*>* curSegSet = _dutyModel.getCurSegNodeSet();
 
-			std::vector<Node*> duty_coveredNodes;
-			for (int d = 0; d < _cur_dutySet.size(); d++) {
-				for (const auto& node : _cur_dutySet[d]->route) {
-					if (node->nodeType == NodeType::seg
-						&& std::find(duty_coveredNodes.begin(), duty_coveredNodes.end(), node) == duty_coveredNodes.end()) {
-						duty_coveredNodes.emplace_back(node);
-					}
-				}
-			}
-			std::cout << "set covering error\n";
-			for (const auto& node1 : *curSegSet) {
-				if (std::find(duty_coveredNodes.begin(), duty_coveredNodes.end(), node1) == duty_coveredNodes.end()) {
-					std::cout << "id = " << node1->segment->getDBId() << " flt = " << node1->segment->getFlightNumber() << "\n";
-				}
-			}
-
-
-
-
-			_assigner.receiveInput(&_cur_dutySet, curSegSet);
+			_assigner.receiveSetCoverInput(&_cur_dutySet, curSegSet);
 			_assigner.labelDecidedDuty(_special_airportSet);
 			
 			_assigner.solve();
 			_cur_dutySet = *_assigner.getAssignedDutySet();
-
-			std::cout << "----------" << num_iter++ << "th iter finished----------\n\n";
+			
 			_decided_dutySet.insert(_decided_dutySet.end(), _cur_dutySet.begin(), _cur_dutySet.end());
+			
+			for (const auto& duty : _decided_dutySet) {
+				for (const auto& node : duty->route) {
+					if (std::find(coveredNodes.begin(), coveredNodes.end(), node) == coveredNodes.end()) {
+						coveredNodes.emplace_back(node);
+					}
+				}
+			}
+			std::cout << "----------covered node until now: " << coveredNodes.size() << "----------\n";
+			std::cout << "----------" << num_iter++ << "th iter finished----------\n\n";
 			updateStartNodeSet(num_iter);
 		}
 	}
@@ -117,6 +118,36 @@ void RollingOpt::clusterCrewMeb() {
 		}
 	}
 }
+void RollingOpt::initMutrualMatrix() {
+	_crewMutualMatrix.clear();	
+	_crewMutualMatrix.shrink_to_fit();
+	
+	int crew_size = _crewSet.size();
+	_crewMutualMatrix.resize(crew_size);	
+	for (int i = 0; i < crew_size; i++) {
+		_crewMutualMatrix[i].resize(crew_size, 1);
+	}
+	//set value for mutual crews	
+	for (int i = 0; i < crew_size; i++) {
+		_crewMutualMatrix[i][i] = 0; //diagonal = 0
+		for (int j = 0; j < crew_size; j++) {
+			if (_crewSet[i]->rankAry->front()->rank == _crewSet[j]->rankAry->front()->rank) {
+				_crewMutualMatrix[i][j] = 0; //same rank
+			}
+			else if (!isRankMatch(_crewSet[i]->rankAry->front(), _crewSet[j]->rankAry->front())) {
+				_crewMutualMatrix[i][j] = 0; //rank combination mutual
+			}
+		}
+	}
+}
+bool RollingOpt::isRankMatch(CREW_RANK* cap, CREW_RANK* fo) {
+	std::string combination;
+	if (cap->rank == "CAP") { combination = cap->position + "-" + fo->position; }
+	else if (cap->rank == "FO") { combination = fo->position + "-" + cap->position; }
+
+	return _rules->rankCombinationSet.find(combination) != _rules->rankCombinationSet.end();
+}
+
 
 void RollingOpt::randomSet_specialAirport() {
 	_inputHandler.getAirportSet(_segSet);
@@ -165,6 +196,15 @@ void RollingOpt::set_rankCombination() {
 	for (int i = 2; i < 5; i++) {
 		combi.str("");
 		combi << CAP_positions[i] << "-" << FO_positions[0];
+		std::cout << combi.str() << "\n";
+		_rankCombinationSet.insert(combi.str());
+		//add J1/2
+		combi.str("");
+		combi << CAP_positions[i] << "-" << FO_positions[7];
+		std::cout << combi.str() << "\n";
+		_rankCombinationSet.insert(combi.str());
+		combi.str("");
+		combi << CAP_positions[i] << "-" << FO_positions[8];
 		std::cout << combi.str() << "\n";
 		_rankCombinationSet.insert(combi.str());
 	}

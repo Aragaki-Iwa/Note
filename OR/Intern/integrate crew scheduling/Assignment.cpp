@@ -122,18 +122,25 @@ void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 		crew->workStatus->setDutyColumn(_decidedDutySet->size());
 	}
 
-	int crew_size = _crewSet->size();
-	//int duty_size = _decidedDutySet->size();
+	int crew_size = _crewSet->size();	
 	int duty_size = decidedDutysID.size();
 
 	//CREW* temp_crew;
+	int gap_crew_duty = 0;//crew当前时间点和欲担当的duty开始时间的间隔
 	bool exist_feasible_duty = false;
 	for (/*int c = 0; c < crew_size; c++*/
 		auto temp_crew = _crewSet->begin(); temp_crew != _crewSet->end(); temp_crew++) {
 		//temp_crew = crewSet[c];
-		
 		 
-		if ((*temp_crew)->workStatus->accumuCreditMin < _rules->maxCreditMin) {
+		if ((*temp_crew)->workStatus->accumuCreditMin > _rules->maxCreditMin ||
+			(*temp_crew)->workStatus->accumuFlyMin > _rules->maxWeekFlyMin) {
+			//need a day off
+			(*temp_crew)->workStatus->accumuCreditMin = 0;
+			(*temp_crew)->workStatus->assigned = true; //assigned a day off
+			(*temp_crew)->workStatus->endDtLoc += _rules->minDayOffMin;
+			(*temp_crew)->workStatus->accumuFlyMin = 0;
+		}
+		else  { //执勤,飞行时间小于规定的最大
 			Path* duty;
 			int d = 0;
 			for (int i = 0; i < duty_size; i++) {				
@@ -144,27 +151,43 @@ void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 					//=="",说明是初次迭代，不需要满足空间接续。不过实际上crew的初始状态中是有一个计划周期开始时的所在地的信息，这里先不考虑
 					continue;
 				}
-				//与duty的间隔若大于minDayOffMint,说明在担当该duty前，实际是进行了一次day off
-				if ((*temp_crew)->workStatus->accumuCreditMin + duty->workMin >= _rules->maxCreditMin
-					|| (*temp_crew)->workStatus->accumuCreditMin + duty->workMin + _rules->allowOverCreditMin >= _rules->maxCreditMin) {
-					break; //不能担当该duty，因为会超时.d越大，时长越长，所以不用再往下查找，直接break
+				/*recent added 7-18*/
+				//可以执行到下面，说明空间接续满足
+				gap_crew_duty = (duty->startDtLoc - (*temp_crew)->workStatus->endDtLoc) / 60;
+
+				if (gap_crew_duty > 72 * 24 * 60) {
+					break;
 				}
+				else if (gap_crew_duty < _rules->minDayOffMin) {
+					//不需要day off，就是duty之间的正常接续
+					//但预先判断一下若担当该duty，是否会超时
+					if ((*temp_crew)->workStatus->accumuCreditMin + gap_crew_duty + duty->workMin > _rules->maxCreditMin
+						|| (*temp_crew)->workStatus->accumuFlyMin + duty->flyMin > _rules->maxWeekFlyMin) {
+						break;
+					}
+				}
+				else if (_rules->minDayOffMin <= gap_crew_duty && gap_crew_duty <= 72 * 24 * 60) { 
+					//day off min set in [36, 72],不允许太长
+					//可担当该duty，但是与duty之间的间隔达到了day off的时长，说明进行了day off
+					(*temp_crew)->workStatus->accumuCreditMin = 0;
+					(*temp_crew)->workStatus->dayoffMin = gap_crew_duty;
+				}
+				/*end recent added 7-18*/
+								
+				//if ((*temp_crew)->workStatus->accumuCreditMin + duty->workMin >= _rules->maxCreditMin
+				//	|| (*temp_crew)->workStatus->accumuCreditMin + duty->workMin + _rules->allowOverCreditMin >= _rules->maxCreditMin) {
+				//	break; //不能担当该duty，因为会超时.d越大，时长越长，所以不用再往下查找，直接break
+				//}
 
 				exist_feasible_duty = true;
 				(*temp_crew)->workStatus->dutyColumn[d] = 1; //先不考虑资质，只考虑空间和时间，所有crew都可以担当任意duty
 
 			}		
 		}
-
+		
 		if (exist_feasible_duty == false) {
-			(*temp_crew)->workStatus->dayoffMin = _rules->minDayOffMin;
-			(*temp_crew)->workStatus->inDay += 2; //day off 2 days
-			(*temp_crew)->workStatus->accumuCreditMin = 0;
-			(*temp_crew)->workStatus->accumuRestMin += _rules->minDayOffMin;
-			
-			(*temp_crew)->workStatus->endDtLoc += _rules->minDayOffMin;
-
-			(*temp_crew)->workStatus->assigned = true; //assigned a day off
+			//当前天找不到可担当的duty，不一定需要day off			
+			(*temp_crew)->workStatus->assigned = true; //assigned a break
 		}
 		else {
 			//考虑资质：special duty只有special crew可以担当
@@ -590,8 +613,11 @@ void Assigner::postProcess() {
 				crew = (*_crewSet)[crew_index];
 				
 				crew->workStatus->accumuFlyMin += duty->flyMin;
-				crew->workStatus->accumuCreditMin += (duty->startDtLoc - crew->workStatus->endDtLoc);				
+				if (crew->workStatus->restStation != "") { 
+					crew->workStatus->accumuCreditMin += (duty->startDtLoc - crew->workStatus->endDtLoc); //初始天不需要加
+				}				
 				crew->workStatus->accumuCreditMin += duty->workMin;
+				
 				crew->workStatus->endDtLoc = duty->endDtLoc;
 				crew->workStatus->restStation = duty->endStation;
 			}
