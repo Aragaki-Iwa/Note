@@ -1,5 +1,9 @@
 #include "IntegrateOptimization.h"
 
+std::vector<CREW*> RollingOpt::getCrewSet() {
+	return _crewSet;
+}
+
 void RollingOpt::optimize() {
 	
 	_net->createNetwork(_segSet, _baseSet, *_rules);
@@ -7,7 +11,7 @@ void RollingOpt::optimize() {
 	for (auto& crew : _crewSet) {
 		crew->workStatus->endDtLoc = resource->startDtLoc;
 	}
-
+	std::cout << utcToUtcString(resource->startDtLoc);
 
 	std::cout << "----------create Network finished----------\n";
 	initMutrualMatrix();
@@ -20,7 +24,7 @@ void RollingOpt::optimize() {
 	try {
 		while (!termination() && num_iter <= 11) {
 			std::cout << "----------" << num_iter << "th iter started----------\n";
-			if (num_iter == 11) {
+			if (num_iter == 3) {
 				int yyy = 7;
 			}
 			
@@ -29,8 +33,10 @@ void RollingOpt::optimize() {
 			_pathFinder.findPathSet(_net, _cur_start_nodeSet, *_rules);
 			_cur_dutySet = *_pathFinder.getPathSet();//此处注意pathFinder中pathSet的内存释放
 			
+			std::cout << "find " << _cur_dutySet.size() << " dutys\n";
 			//删除掉只有一个segment，且为dhd的duty
 			removeDhdDuty(_cur_dutySet);
+			std::cout << "after remove one-dhd dutys,still " << _cur_dutySet.size() << " dutys\n";
 
 			/*set covering: get decidedDutySet*/
 			_dutyModel.buildModel(*_net, _cur_dutySet, _crewSet, _special_airportSet, *_rules);
@@ -52,15 +58,52 @@ void RollingOpt::optimize() {
 			
 			for (const auto& duty : _decided_dutySet) {
 				for (const auto& node : duty->route) {
-					if (std::find(coveredNodes.begin(), coveredNodes.end(), node) == coveredNodes.end()) {
+					if (node->nodeType == seg && std::find(coveredNodes.begin(), coveredNodes.end(), node) == coveredNodes.end()) {
 						coveredNodes.emplace_back(node);
 					}
 				}
 			}
-			std::cout << "----------covered node until now: " << coveredNodes.size() << "----------\n";
+			std::cout << "----------covered node until now: " << coveredNodes.size() << "----------\n\n";
 			std::cout << "----------" << num_iter++ << "th iter finished----------\n\n";
 			updateStartNodeSet(num_iter);
 		}
+
+		/*ofstream uncoveredFlts;
+		uncoveredFlts.open("uncoveredFlights_output.txt", std::ios::out);
+		flightParser flt_csv_parser;
+		std::vector<string> headers = flt_csv_parser.getDefaultHeaders();
+		for (const auto& col : headers) {
+			uncoveredFlts << col << ",";
+		}
+		uncoveredFlts << "\n";*/
+		int num = 0;
+		for (const auto& node : *_net->nodeSet) {
+			if (node->nodeType == NodeType::seg /*&& node->assigned == false*/) {
+				//uncoveredFlts << flt_csv_parser.toCsv(headers, node->segment);
+				num++;
+			}			
+		}
+		//uncoveredFlts.close();
+
+		std::cout << "num of seg " << num << "\n";
+
+		std::vector<Node*> coveredNodes;
+		for (const auto& crew : _crewSet) {
+			auto crew_dutySet = crew->workStatus->CreditedDutySet;
+			for (const auto& duty : crew_dutySet) {
+				for (const auto& node : duty->route) {
+					if (node->nodeType == NodeType::seg && node->assigned 
+						&& std::find(coveredNodes.begin(), coveredNodes.end(),node) == coveredNodes.end()) {
+						coveredNodes.emplace_back(node);
+					}
+				}
+			}
+		
+		}
+		
+		std::cout << "covered node num " << coveredNodes.size() << "\n";
+
+
 	}
 	catch (IloException& e) {
 		std::cout << "iloException: " << e.getMessage() << "\n";

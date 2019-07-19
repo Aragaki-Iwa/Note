@@ -21,11 +21,12 @@ public:
 	std::map<string, int> specialCredentials;
 	//担当该duty的crew
 	std::vector<CREW*> work_crewSet;
-	
+
 	//for basedCrew
 	std::list<int> crewID;//两个乘务员:CAP和FO，由互斥矩阵限制，不存在两个同级别的不可能出现在同一duty上
 
 };
+
 
 class PathFinder
 {

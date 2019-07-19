@@ -81,7 +81,6 @@ private:
 	//∞¥ÃÏ∑÷≈‰duty
 	void initialSolution_baseCrewAndDay();
 	
-	
 		
 	bool isCurSegCoverFinished();
 	
@@ -99,7 +98,7 @@ private:
 	/*----------post-process----------*/
 	void postProcess();
 	
-	void updateCrewStatus();
+	void updateCrewStatus(CREW* crew, Path* duty);
 
 	//debug
 	string _uncoveredFltFile = "debug-uncoverFlt.csv";

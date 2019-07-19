@@ -16,6 +16,8 @@ public:
 	~RollingOpt() {
 		delete _net;
 	}
+
+	std::vector<CREW*> getCrewSet();
 	void optimize();	
 	void inputData(std::map<string, std::vector<void*>>& dataSet, const std::vector<string>& objNameSet);
 	void setRules(CrewRules& rules);

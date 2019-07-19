@@ -7,10 +7,10 @@ std::vector<Path*>* PathFinder::getPathSet() {
 void PathFinder::findPathSet(Network* net, vector<Node*>& startNodeSet, const CrewRules& rules)
 {		
 	//debug
-	std::vector<Node*> copyNodeSet(*net->nodeSet);
+	/*std::vector<Node*> copyNodeSet(*net->nodeSet);
 	std::sort(copyNodeSet.begin(), copyNodeSet.end(),
 		[](const Node *a, const Node *b) { return a->startDtUtc < b->startDtUtc; });
-	
+	*/
 
 
 	//std::vector<string> bases;
@@ -387,7 +387,7 @@ void PathFinder::dfs_nonrecursive2(Node* startNode, const CrewRules& rules) {
 			nodeStack.pop();
 			continue;			
 		}
-		std::cout << "cur base" << startNode->depStation << "\t";
+		//std::cout << "cur base" << startNode->depStation << "\t";
 		/*if (s->nodeType == NodeType::seg || s->nodeType == NodeType::dhd) {
 			std::cout << "cur s node:" << s->segment->getFlightNumber() << "\n";
 		}
@@ -395,7 +395,7 @@ void PathFinder::dfs_nonrecursive2(Node* startNode, const CrewRules& rules) {
 			std::cout << "cur s node:" << s->name << "\n";
 		}
 		std::cout << "cur node address " << s << "\n";*/
-		std::cout << "_pathSet.size = " << _pathSet.size() << "\n";
+		//std::cout << "_pathSet.size = " << _pathSet.size() << "\n";
 
 		if (checkTermination(*nextNode->labelSet.front()->preLabel, *nextNode->labelSet.front(), rules)) {
 			//以s为出发点，nextNode为延伸点，判断是否可延伸，即nextNode是否是一个可行的终点

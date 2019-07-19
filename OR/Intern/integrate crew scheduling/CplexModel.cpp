@@ -2,9 +2,8 @@
 
 void dutyModel::solve() {
 	try {
-		_cplex.solve();		
-		std::cout << "-----------cur model solved-----------\n";
-		std::cout << "-----OBJ VALUE:" << _cplex.getObjValue() << "-----\n";
+		_cplex.solve();				
+		std::cout << "-----Set Covering OBJ VALUE:" << _cplex.getObjValue() << "-----\n";
 
 		/*std::cout << "lower num cover var = " << _cplex.getValue(_lowerNumCoverVar) << "\n";
 		std::cout << "upper num cover var = " << _cplex.getValue(_upperNumCoverVar) << "\n";*/
@@ -393,7 +392,12 @@ void dutyModel::post_process(/*Network& net, */std::vector<Path*>& pathSet, std:
 		if (dutyVarValue > 0.5) {			
 			_decided_dutySet.emplace_back(pathSet[d]);
 		}
+		//added 7-18
+		else {
+			delete pathSet[d];
+		}
 	}
+
 	////2.实际指派duty给crew
 	//std::cout << "this iter, assigned duty to crews: \n";
 	//int crew_duty_varValue;

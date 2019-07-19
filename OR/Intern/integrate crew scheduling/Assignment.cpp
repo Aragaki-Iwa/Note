@@ -152,13 +152,20 @@ void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 					continue;
 				}
 				/*recent added 7-18*/
-				//可以执行到下面，说明空间接续满足
+				//可以执行到下面，说明空间接续满足				
+				if ((*temp_crew)->idCrew == "001551" && (*temp_crew)->workStatus->CreditedDutySet.size() > 0) {
+					int gg = 0;
+				}
+
 				gap_crew_duty = (duty->startDtLoc - (*temp_crew)->workStatus->endDtLoc) / 60;
+				/*if (gap_crew_duty <= 0) {
+					continue;
+				}*/
 
 				if (gap_crew_duty > 72 * 24 * 60) {
 					break;
 				}
-				else if (gap_crew_duty < _rules->minDayOffMin) {
+				else if (0 < gap_crew_duty && gap_crew_duty < _rules->minDayOffMin) {
 					//不需要day off，就是duty之间的正常接续
 					//但预先判断一下若担当该duty，是否会超时
 					if ((*temp_crew)->workStatus->accumuCreditMin + gap_crew_duty + duty->workMin > _rules->maxCreditMin
@@ -169,8 +176,9 @@ void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 				else if (_rules->minDayOffMin <= gap_crew_duty && gap_crew_duty <= 72 * 24 * 60) { 
 					//day off min set in [36, 72],不允许太长
 					//可担当该duty，但是与duty之间的间隔达到了day off的时长，说明进行了day off
-					(*temp_crew)->workStatus->accumuCreditMin = 0;
-					(*temp_crew)->workStatus->dayoffMin = gap_crew_duty;
+					//(*temp_crew)->workStatus->accumuCreditMin = 0;
+					//NOTE:day off的时间更新放在做了决策后再判断，7-18-23：52
+					////(*temp_crew)->workStatus->dayoffMin = gap_crew_duty;
 				}
 				/*end recent added 7-18*/
 								
@@ -214,11 +222,11 @@ void Assigner::initCrewDutyColumn(std::vector<int>& decidedDutysID) {
 }
 void Assigner::setCrewDutyMatchAdj() {
 	_dutyCrewAdj.clear();
-	_crewDutyAdj.clear();
+	_crewDutyAdj.clear(); 
 	_dutyCrewAdj.shrink_to_fit();
 	_crewDutyAdj.shrink_to_fit();
 
-	int crew_size = (*_crewSet).size();
+	int crew_size = _crewSet->size();
 	int duty_size = _decidedDutySet->size();
 	_dutyCrewAdj.resize(duty_size);
 	_crewDutyAdj.resize(crew_size);
@@ -450,6 +458,10 @@ void Assigner::initialSolution_baseCrewAndDay() {
 		//Solution day_soln(crew_size, duty_size); //每天的解，求完每天的解，最后汇总得到当前迭代的解
 		//day_soln.CrewDutyAdj.resize(crew_size);
 		//day_soln.DutyCrewAdj.resize(duty_size);
+		_initialSoln->CrewDutyAdj.clear();
+		_initialSoln->DutyCrewAdj.clear();
+		_initialSoln->CrewDutyAdj.resize(crew_size);
+		_initialSoln->DutyCrewAdj.resize(total_duty_size);
 
 		bool finished = true;
 		int c = 0;
@@ -459,9 +471,12 @@ void Assigner::initialSolution_baseCrewAndDay() {
 
 		do {
 			crew = (*_crewSet)[c];
+			
 			duty_size = _crewDutyAdj[c].size();
 			for (int i = 0; i < duty_size; i++) {
-				d = curDecidedDutys[i];
+				//d = curDecidedDutys[i];
+				d = _crewDutyAdj[c][i];
+
 				duty = (*_decidedDutySet)[d];
 				
 				if (duty->startDtLoc - crew->workStatus->endDtLoc < _rules->horizon_rules->minOutRestMin) { //两个duty之间的间隔
@@ -475,12 +490,26 @@ void Assigner::initialSolution_baseCrewAndDay() {
 					if (_crewMutualMatrix[c][c2] == 1) { //如果找不到符合的duty，即所有的duty都已包含一个与当前crew不match的crew
 						//crew c可以担当duty d
 						//update
+
+						if (d == 22 || d == 57) {
+							int dd = 0;
+						}
+						if (crew->idCrew == "001551" || (*_crewSet)[c2]->idCrew == "001551") {
+							int gg = 0;
+						}
+						
+
 						crew->workStatus->assigned = true;
 						duty->crewID.push_front(c);
 
 						_initialSoln->CrewDutyAdj[c].emplace_back(d);
 						_initialSoln->DutyCrewAdj[d].emplace_back(c);
 						_initialSoln->CrewDutyMatrix[c][d] = 1;
+
+						/////更新该duty上所有crew的状态
+						updateCrewStatus(crew, duty);
+						updateCrewStatus((*_crewSet)[c2], duty);
+						/////
 
 						//duty assigned over,update node of the duty
 						for (auto& node : duty->route) {
@@ -495,6 +524,10 @@ void Assigner::initialSolution_baseCrewAndDay() {
 				else if (num_crew == 0) {
 					crew->workStatus->assigned = true;
 					duty->crewID.push_front(c);
+
+					if (crew->idCrew == "001551" /*|| (*_crewSet)[c2]->idCrew == "002798"*/) {
+						int gg = 0;
+					}
 
 					_initialSoln->CrewDutyAdj[c].emplace_back(d);
 					_initialSoln->DutyCrewAdj[d].emplace_back(c);
@@ -522,7 +555,7 @@ void Assigner::initialSolution_baseCrewAndDay() {
 
 	if (isCurSegCoverFinished() == false) {
 		//debug
-		_uncoveredFltFile = to_string(total_duty_size) + _uncoveredFltFile;
+		/*_uncoveredFltFile = to_string(total_duty_size) + _uncoveredFltFile;
 		_outStream.open(_uncoveredFltFile);
 		int dd = 0;
 		for (const auto& node : *_curSegNodeSet) {
@@ -530,7 +563,7 @@ void Assigner::initialSolution_baseCrewAndDay() {
 				_outStream << _fltParser.toCsv(_fltParser.getDefaultHeaders(), node->segment) << "\n";
 			}
 		}
-		_outStream.close();
+		_outStream.close();*/
 	}
 
 }
@@ -545,6 +578,33 @@ bool Assigner::isCurSegCoverFinished() {
 	}
 	return true;
 }
+void Assigner::updateCrewStatus(CREW* crew, Path* duty) {
+	crew->workStatus->CreditedDutySet.emplace_back(duty);
+	
+	crew->workStatus->accumuFlyMin += duty->flyMin;
+
+	int duration = std::abs(duty->startDtLoc - crew->workStatus->endDtLoc) / 60;
+	if (crew->workStatus->restStation != "") {
+		crew->workStatus->accumuCreditMin += duration; //初始天不需要加
+
+		crew->workStatus->totalCreditMint += duration;
+	}
+	
+	crew->workStatus->accumuCreditMin += duty->workMin;
+	//判断是否间隔时长满足day off 7-18-23：53
+	//added
+	if (_rules->minDayOffMin < duration && duration <= 72 * 24 * 60) {
+		crew->workStatus->accumuCreditMin = 0;
+	}
+
+	crew->workStatus->endDtLoc = duty->endDtLoc;
+	crew->workStatus->restStation = duty->endStation;
+
+	crew->workStatus->totalFlyMint += crew->workStatus->accumuFlyMin;
+	crew->workStatus->totalCreditMint += duty->workMin;
+
+}
+
 
 void Assigner::calObjValue(Solution& solution) {
 	//cal variance	
@@ -609,18 +669,37 @@ void Assigner::postProcess() {
 			_assignedDutySet->emplace_back(duty);
 
 			//update crew workstatus
-			for (const auto& crew_index : _optSoln->DutyCrewAdj[d]) {
-				crew = (*_crewSet)[crew_index];
-				
-				crew->workStatus->accumuFlyMin += duty->flyMin;
-				if (crew->workStatus->restStation != "") { 
-					crew->workStatus->accumuCreditMin += (duty->startDtLoc - crew->workStatus->endDtLoc); //初始天不需要加
-				}				
-				crew->workStatus->accumuCreditMin += duty->workMin;
-				
-				crew->workStatus->endDtLoc = duty->endDtLoc;
-				crew->workStatus->restStation = duty->endStation;
-			}
+			//for (const auto& crew_index : _optSoln->DutyCrewAdj[d]) {
+			//	crew = (*_crewSet)[crew_index];
+			//	
+			//	crew->workStatus->CreditedDutySet.emplace_back(duty);
+
+			//	if (crew->idCrew == "003537"
+			//		&& crew->workStatus->CreditedDutySet.size() > 0) {
+			//		int uuuu = 0;
+
+			//	}
+			//	
+			//	std::sort(crew->workStatus->CreditedDutySet.begin(), crew->workStatus->CreditedDutySet.end(),
+			//		[](const Path* a, const Path* b) {return a->endDtLoc < b->endDtLoc; });
+			//	
+			//					
+
+			//	crew->workStatus->accumuFlyMin += duty->flyMin;
+			//	if (crew->workStatus->restStation != "") { 
+			//		crew->workStatus->accumuCreditMin += std::abs(duty->startDtLoc - crew->workStatus->endDtLoc) / 60; //初始天不需要加
+			//	}				
+			//	crew->workStatus->accumuCreditMin += duty->workMin;
+			//	
+			//	/*crew->workStatus->endDtLoc = duty->endDtLoc;
+			//	crew->workStatus->restStation = duty->endStation;*/
+			//	crew->workStatus->endDtLoc = crew->workStatus->CreditedDutySet.back()->endDtLoc;
+			//	crew->workStatus->restStation = crew->workStatus->CreditedDutySet.back()->endStation;
+
+			//	
+			//	crew->workStatus->totalFlyMint += crew->workStatus->accumuFlyMin;
+			//	crew->workStatus->totalCreditMint += crew->workStatus->accumuCreditMin;
+			//}
 		}
 	}	
 }

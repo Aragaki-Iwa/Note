@@ -6,6 +6,7 @@
 #include "Network.h"
 #include "FindDutySet.h"
 #include "IntegrateOptimization.h"
+#include "Output.h"
 
 void randomSet_specialAirports(std::vector<DBAirport*>& specialAirportSet) {
 	int num = specialAirportSet.size() - 4;
@@ -93,6 +94,17 @@ int main()
 	//over construct test
 
 	opt.optimize();
+
+	Outputer outputer;
+	string sch_file("Schedule_output.txt");
+	string status_file("CrewStatus_ouput.txt");
+	auto crewSet = opt.getCrewSet();
+	outputer.receiveCrewSet(crewSet);
+
+	outputer.writeSchedule(sch_file);
+	outputer.writeCrewStatus(status_file);
+
+
 
  	system("pause");
 	return 0;
