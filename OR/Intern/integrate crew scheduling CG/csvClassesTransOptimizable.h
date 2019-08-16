@@ -155,6 +155,7 @@ public:
 		_creditedDutySet.clear();
 		_creditedDutySet.shrink_to_fit();
 	}
+	//
 	void setInitStatus(const time_t initialTime, const std::string& initialStation);	
 
 	bool getDayoff();

@@ -46,7 +46,7 @@ public:
 	//just a temp function, for test
 	void createCase();
 			
-
+	std::vector<Solution*> soln_pool;
 private:	
 	void initialCrewGroup(CrewGroup& initGroup);
 	
@@ -73,8 +73,8 @@ private:
 	const int _SECONDS_ONE_DAY = 24 * 3600; //24 hour * 3600 secends
 	SegNodeSet* _cur_day_segnode_set;
 
-	ColumnGeneration* _column_generation;
-
+	//ColumnGeneration* _column_generation;
+	
 
 
 };

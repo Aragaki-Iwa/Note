@@ -26,16 +26,21 @@ public:
 	void setCurDaySegSet();
 	void setIndexOfCurSeg();
 	void labelSpecialSegPath(std::vector<std::string>& specialAirports);
+	//! 根据segpath_set和crew_set对flymint的均值进行预估
+	//! 一天执行一次即可
+	void estimateMeanFlyMin();
+	int getMeanFlyMin() const { return _mean_fly_mint; }
 
 	void updateDuals(std::vector<double>& segCoverDuals, std::vector<double>& crewAssignDuals);
 	void findGroups();
-	int* getFlyMintRange();
+	//int* getFlyMintRange();
 	//! create new columns, add to this->_local_pool
 	//! match crew group and segment path
 	//! to get columns that have small negetive reduced cost
 	//! actually, is assign group for each segpath in _seg_path_searcher._segpath_set
-	void matchGroupAndPath();
-	//void addToMaster();
+	void matchGroupAndPath();	
+	//! 要赋值，segpath的时间属性
+	void addRestColumns();
 
 	/*output for master problem*/
 	
@@ -45,7 +50,8 @@ public:
 	ColumnPool& getCurLocalPool() { return _local_pool; }
 
 private:		
-	
+	//! 根据预估的flymint均值，计算所有column的cost
+	int calBalanceCost(CrewGroup& crewGroup);
 	CrewRules* _rules;
 	std::vector<Opt_Segment*> _cur_day_seg_set;
 	std::vector<CrewNode*> _crewnode_set; //TODO:未初始化
@@ -55,7 +61,7 @@ private:
 	SegPathSearcher _seg_path_searcher;
 	std::vector<SegPath*> _cur_day_path_set;
 	
-	int _fly_mint_range[2];
+	int _mean_fly_mint;
 	/*std::vector<double> _seg_cover_duals;
 	std::vector<double> _crew_assign_duals;
 	std::vector<double> _balance_flytime_duals;

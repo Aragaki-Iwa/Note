@@ -1,5 +1,8 @@
 #include "master_problem.h"
+#include "SummeryTool_H.h"
 #include <assert.h>
+
+static Summery::StopWatch STOP_WATCHER;
 
 MasterProblem::MasterProblem() {
 	_model = IloModel(_env);
@@ -19,15 +22,13 @@ MasterProblem::MasterProblem() {
 
 MasterProblem::~MasterProblem() {
 	end();
-
 	_env.end();
+
+	std::cout << "masterproblem destruct function\n";
 }
 void MasterProblem::end() {
-	_model.end();
-	_cplex.end();
-	_obj.end();
-
 	_dvars_path.end();
+	_dvars_uncover.end();
 	/*_dvar_upper_flytime.end();
 	_dvar_lower_flytime.end();*/
 	/*_dvar_upper_seg_num.end();
@@ -38,6 +39,13 @@ void MasterProblem::end() {
 	_constraints_crewassign.end();
 	/*_constraints_blance_u.end();
 	_constraints_blance_l.end();*/
+	_obj.end();
+	
+	_model.end();
+	_cplex.end();
+	
+
+	
 }
 
 void MasterProblem::initSetting() {
@@ -73,36 +81,10 @@ void MasterProblem::initParameters() {
 }
 
 
-void MasterProblem::addRestColumns() {
-	std::string name;
-
-	for (size_t i = 2; i < _crewnode_set->size(); i++) {
-		Column* rest_col = new Column();
-		rest_col->type = "rest_col";
-		CrewGroup* single_crew = new CrewGroup();
-		single_crew->getNodeSequence().emplace_back((*_crewnode_set)[i]); //NOTE:might exist bug
-		single_crew->setCrewIndexSet();
-		single_crew->setCrewGroup();
-		single_crew->setBasicProperties();
-		single_crew->computeCost();
-
-		rest_col->_crewgroup = single_crew;
-
-		SegPath* segpath = new SegPath();
-		rest_col->_segpath = segpath;
-		rest_col->_segpath->getSegPathCost().total_cost = 0; //NOTE: 休息列的成本定义为0 
-
-		global_pool->emplace_back(rest_col);
-		
-		name.clear();
-		name = "rest_col_";
-		name += (*_crewnode_set)[i]->optCrew->getIdCrew();
-		_dvars_path.add(IloNumVar(_env, 0, 1, IloNumVar::Type::Float, name.data()));
-	}
-
-}
 
 void MasterProblem::addObjFunction() {
+	std::string name("");
+	
 	double total_cost = 0;
 	IloExpr expr_xp(_env, 0);
 	for (size_t i = 0; i < global_pool->size(); i++) {
@@ -110,8 +92,21 @@ void MasterProblem::addObjFunction() {
 		expr_xp += (*global_pool)[i]->cost * _dvars_path[i];
 
 		total_cost += (*global_pool)[i]->cost;
+
+		if ((*global_pool)[i]->type == ColumnType::duty) {
+			_dvars_path[i].setName(std::to_string(i).data());
+		}
+		else {
+			
+			name += "relax_col of ";
+			name += (*global_pool)[i]->_crewgroup->getCrewGroup().front()->getIdCrew();
+
+			_dvars_path[i].setName(name.data());
+			name.clear();
+		}
+
 	}
-	std::string name;
+	name.clear();
 	for (size_t i = 0; i < _seg_num; i++) {
 		
 		name = "uncover " + std::to_string(i);
@@ -217,9 +212,10 @@ void MasterProblem::buildModel() {
 	addConstraints2();
 }
 
-void MasterProblem::exportModel() {
-	const char* master_file_name = "../data/output/master_model.lp";
-	_cplex.exportModel(master_file_name);
+void MasterProblem::exportModel(const std::string& curDayStr, int iter) {
+	std::string master_file_name = "../data/output/lp_files/master_model_day_" + curDayStr + "_iter_" + std::to_string(iter) + ".lp";
+		
+	_cplex.exportModel(master_file_name.data());
 }
 
 int MasterProblem::solve() {
@@ -235,14 +231,14 @@ int MasterProblem::solve() {
 	}
 
 	_objValue = _cplex.getObjValue();
-	std::cout << "----------------------the objective value is " << _objValue << "----------------------" << std::endl;
 	
 	return status;
 }
 
-void MasterProblem::writeSoln() {
-	const char* LPsoln_file_name = "../data/output/LP_soln.sln";
-	_cplex.writeSolution(LPsoln_file_name);
+void MasterProblem::writeSoln(const std::string& curDayStr, int iter) {
+	std::string LPsoln_file_name  = "../data/output/lp_files/LP_soln_day_" + curDayStr + "_iter_" + std::to_string(iter) + ".sln";
+		
+	_cplex.writeSolution(LPsoln_file_name.data());
 }
 
 std::vector<double>& MasterProblem::getSegCoverDuals() {
@@ -277,52 +273,77 @@ std::vector<double>& MasterProblem::getCrewAssignDuals() {
 void MasterProblem::addNewColumns(ColumnPool& newPool) {
 	//global_pool->column_pool.insert(global_pool->column_pool.end(), columnpool_ptr->column_pool.begin(), columnpool_ptr->column_pool.end());
 	
+	int report_frequncy = 10000;
+
+	//std::stringstream ct_str;
+	int index = global_pool->size();
+	IloNumVarArray add_vars(_env);
+	IloNumArray add_vars_cost(_env);
+	
+	STOP_WATCHER.Start();
 	for (size_t i = 0; i < newPool.size(); i++) {
+		
+		if (i > 0 && i%report_frequncy == 0) {
+			STOP_WATCHER.Stop();
+			std::cout << "added " << i << " columns\n";
+			STOP_WATCHER.printElapsed();
+			STOP_WATCHER.Restart();
+		}
+
+
 		global_pool->emplace_back(newPool[i]); //NOTE:改变了CG中的globalPool
 
-		IloNumVar col_var = IloNumVar(_env, 0, 1, IloNumVar::Type::Float);
+		IloNumVar col_var = IloNumVar(_env, 0, 1, IloNumVar::Type::Float);		
+		col_var.setName(std::to_string(index++).data());
+		
 		_dvars_path.add(col_var);
-		// obj
-		_obj.setExpr(_obj.getExpr() + newPool[i]->cost * col_var);
-		// seg cover constraint
-		//auto segnode_set = new_pool[i]->_segpath->getNodeSequence();
+		// obj	
+		add_vars.add(col_var);
+		add_vars_cost.add(newPool[i]->cost);
+
+		// seg cover constraint		
 		auto seg_id_set = newPool[i]->_segpath->optseg_id_sequence; //NOTE：用直接保存optSeg在curSegSet中的index代替了指针查找
 		int ct_id = 0;
-		for (size_t s = 0; s < seg_id_set.size(); s++) {
-			/*auto pos = std::find(_seg_set->begin(), _seg_set->end(), segnode_set[i]->optSegment);
-			ct_id = std::distance(_seg_set->begin(), pos);*/
-			ct_id = seg_id_set[s];
-			IloExpr ct_cover(_env);
-			//if (pos != _seg_set->end()) { //按理来说此处应该必然是成立的
-			
-				ct_cover += col_var;
-				_constraints_segcover[ct_id].setExpr(_constraints_segcover[ct_id].getExpr() + (ct_cover + _dvars_uncover[ct_id] == 1));
-			//}
+		for (size_t s = 0; s < seg_id_set.size(); s++) {			
+			ct_id = seg_id_set[s];			
+			_constraints_segcover[ct_id].setLinearCoef(col_var, 1);			
 		}
-		// crew assign and balance constraint
-		//auto crewnode_set = new_pool[i]->_crewgroup->getNodeSequence();
+
+		/*ct_str.str("");
+		ct_str << _constraints_segcover[ct_id];
+		ct_str << "\n";*/		
+		
+		// crew assign constraint
 		auto crewnode_id_set = newPool[i]->_crewgroup->optcrew_id_set;
 		ct_id = 0;
-		for (size_t c = 0; c < crewnode_id_set.size(); c++) {
-			//auto pos = std::find(_crewnode_set->begin(), _crewnode_set->end(), crewnode_set[i]);
-			//ct_id = pos - _crewnode_set->begin();
-			ct_id = crewnode_id_set[c];
-			IloExpr ct_assign(_env);
-			//IloExpr ct_balance(_env);
-			//if (pos != _crewnode_set->end()) { //按理来说此处应该必然是成立的
-
-				ct_assign += col_var;
-				_constraints_crewassign[ct_id].setExpr(_constraints_crewassign[ct_id].getExpr() + (ct_assign == 1));
-
-				//balance ct
-				/*ct_balance += _init_crew_fly_mint[c] + newPool[i]->_segpath->getSegPathCost().fly_time_costtuple.unit * col_var;
-				_constraints_blance_u[ct_id].setExpr(_constraints_blance_u[ct_id].getExpr() + (ct_balance - _dvar_upper_flytime <= 0));
-				_constraints_blance_l[ct_id].setExpr(_constraints_blance_l[ct_id].getExpr() + (ct_balance - _dvar_upper_flytime <= 0));*/
-			//}
+		for (size_t c = 0; c < crewnode_id_set.size(); c++) {			
+			ct_id = crewnode_id_set[c];			
+			_constraints_crewassign[ct_id].setLinearCoef(col_var, 1);							
 		}
 
+		//ct_str << _constraints_crewassign[ct_id];
+
+		//debug
+		/*if (newPool.size() > 1000) {
+			std::cout << "seg ct " << ct_str.str() << "\n";
+		}*/
+		
 	}
 
+	/*std::stringstream obj_str;
+	obj_str << _obj;
+	std::cout << "before obj" << obj_str.str() << "\n";*/
+	
+	//obj_str.str("");
+	
+	
+	_obj.setLinearCoefs(add_vars, add_vars_cost); 
+	/*obj_str << _obj;
+	std::cout << "after obj" << obj_str.str() << "\n";*/
+	
+	add_vars.end();
+	add_vars_cost.end();
+	
 }
 //void MasterProblem::reset() {
 //	end();

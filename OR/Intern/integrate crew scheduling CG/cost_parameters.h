@@ -51,9 +51,8 @@ class SegPathCost
 public:
 	SegPathCost() {}
 	void calTotalCost() {
-		total_cost = 0;
-		/*total_cost = fly_time_cost + credit_time_cost + dhd_cost + longtime_stop_cost + special_credential_cost;*/
-		total_cost = fly_time_costtuple.cost + dhd_costtuple.cost + special_credential_costtuple.cost;
+		total_cost = 0;		
+		total_cost = /*fly_time_costtuple.cost +*/ dhd_costtuple.cost + special_credential_costtuple.cost;
 	}
 	double getTotalCost() const {
 		return total_cost;
@@ -67,9 +66,10 @@ public:
 	////为了使这些航班集中在一条路上，该cost可以设为：固定cost(即惩罚) * （该path包含的总的航班数/特殊要求（如特殊航班）数量）(百分数表示)。当然，分母不为0
 	//double special_credential_cost;
 	
-	costTuple fly_time_costtuple;
+	//costTuple fly_time_costtuple;
 	costTuple dhd_costtuple;
 	costTuple special_credential_costtuple;
+
 };
 
 #endif // !COST_PARAMETERS_H

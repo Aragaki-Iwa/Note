@@ -36,6 +36,8 @@ SegPathSearcher::~SegPathSearcher() {
 	_net = NULL;
 	_s = NULL;
 	_rules = NULL;
+
+	
 }
 void SegPathSearcher::clear() {
 	for (auto node : _net->nodeSet) {
@@ -76,12 +78,20 @@ void SegPathSearcher::enumerateByDFS() {
 	while (!node_stack.empty()) {
 		SegNode *cur_node = node_stack.top();
 		
+		/*if (cur_node != _s) {
+			std::cout << "cur node :" << cur_node->optSegment->getDBId() << ", type" << cur_node->nodeType << "\n";
+		}*/
+		
 		auto out_arc_set = &cur_node->outArcSet;
 		size_t arc_set_size = out_arc_set->size();		
 		size_t i = 0;
 		for (; i < arc_set_size; i++) {
 			SegArc *cur_arc = (*out_arc_set)[i];
 			next_node = cur_arc->endNode;
+			
+			/*if (next_node->optSegment != NULL) {
+				std::cout << "next node :" << next_node->optSegment->getDBId() << ", type" << next_node->nodeType << "\n";
+			}*/
 
 			int visited = _visited_by_path[cur_arc];
 			// next_node not visited and not been visited just recently
@@ -115,7 +125,9 @@ void SegPathSearcher::enumerateByDFS() {
 		}
 		//end! added		
 		else if (isValidDuration(*end_label)) {			
-			_segpath_set.emplace_back(backtrack(*end_label));
+			SegPath* new_path = backtrack(*end_label);
+			new_path->init();
+			_segpath_set.emplace_back(new_path);
 			
 			//added 8-7-2019
 			//seg-dhd, cut, but creat a new path
@@ -124,10 +136,10 @@ void SegPathSearcher::enumerateByDFS() {
 				node_stack.pop();
 			}
 		}
-		//else if (isMetTermination(*end_label)) { //changed 8-7-2019 isMetTermination 应该正好是isValidDuration的反面，所以不需要再判断
-		//	next_node->visited = false;
-		//	node_stack.pop();
-		//}		
+		else { //  //if (isMetTermination(*end_label)) { //changed 8-7-2019 isMetTermination 应该正好是isValidDuration的反面，所以不需要再判断
+			next_node->visited = false;
+			node_stack.pop();
+		}		
 	}
 }
 

@@ -87,12 +87,10 @@ bool CrewRules::isFasibleCombination(const std::vector<Opt_CREW*>& crewComb) {
 	if (crewComb.size() == 1) {
 		return	true;
 	}
-	
-	Opt_CREW* opt_crew;
+		
 	std::vector<std::string> combi;
-	for (size_t i = 0; i < crewComb.size(); i++) {
-		opt_crew = crewComb[i];
-		combi.emplace_back(opt_crew->getCurPosition());
+	for (size_t i = 0; i < crewComb.size(); i++) {		
+		combi.emplace_back(crewComb[i]->getCurPosition());
 	}
 	//std::sort(combi.begin(), combi.end());
 	//不断求交集

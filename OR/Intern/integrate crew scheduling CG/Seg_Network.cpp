@@ -94,16 +94,25 @@ SegNetwork::~SegNetwork() {
 }
 
 void SegNetwork::createNetwork() {
-	createOptSegNodes();
+	createOptSegNodes();	
+	std::cout << "number of nodes" << nodeSet.size() << "\n";
 	createDeadheadNodes();
+	std::cout << "number of nodes, include dhd-node" << nodeSet.size() << "\n";
 	sortNodeSet();
 	createBaseNodes();
 	
 	createOptSegArcs();
+	std::cout << "number of arcs" << arcSet.size() << "\n";
 	createBaseArcs();
+	std::cout << "number of arcs, include base-arcs" << arcSet.size() << "\n";
 
 	addLongArcs();
+	std::cout << "number of arcs, after add long-arcs" << arcSet.size() << "\n";
+	
 	removeIsolatedNode();
+	std::cout << "After removed Isolated Nodes\n";
+	std::cout << "final number of arcs" << arcSet.size() << "\n";
+	std::cout << "final number of arcs" << arcSet.size() << "\n";
 }
 
 void SegNetwork::updateResourceAndSink() {		
@@ -333,6 +342,14 @@ void SegNetwork::removeIsolatedNode() {
 		finished = true;
 		for (size_t i = begin; i < middle_node_set.size(); i++) {
 			cur = middle_node_set[i];
+
+
+			if (cur->optSegment->getDBId() == 54265954 || cur->optSegment->getDBId() == 54265916) {
+				int ttt = 0;
+			}
+
+
+
 			if (cur->outArcSet.size() == 0) {
 				if (cur->nodeType == NodeType::seg) {
 					isolatedNodeFile << flt_csv_parser.toCsv(headers, &cur->optSegment->getSegment());
@@ -340,7 +357,7 @@ void SegNetwork::removeIsolatedNode() {
 				
 				// 对出弧为0的点和与其连接的点，删掉之间的弧
 				for (auto arc = cur->inArcSet.begin(); arc != cur->inArcSet.end();) {
-					auto out_arc_vec = (*arc)->startNode->outArcSet;
+					SegArcSet& out_arc_vec = (*arc)->startNode->outArcSet;
 					for (auto outarc = out_arc_vec.begin(); outarc != out_arc_vec.end();) {
 						if (*outarc == *arc) {
 							out_arc_vec.erase(outarc);
@@ -361,7 +378,7 @@ void SegNetwork::removeIsolatedNode() {
 				}
 				
 				for (auto arc = cur->outArcSet.begin(); arc != cur->outArcSet.end();) {
-					auto in_arc_vec = (*arc)->endNode->inArcSet;
+					SegArcSet& in_arc_vec = (*arc)->endNode->inArcSet;
 					for (auto inarc = in_arc_vec.begin(); inarc != in_arc_vec.end();) {
 						if (*inarc == *arc) {
 							in_arc_vec.erase(inarc);

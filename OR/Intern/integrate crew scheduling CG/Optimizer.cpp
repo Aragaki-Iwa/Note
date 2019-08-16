@@ -7,14 +7,19 @@
 #include "Crew_Path.h"
 #include "Seg_Path.h"
 #include "CrewGroupSearcher.h"
+#include "OutputHandler.h"
 
 //! for debug
 #include "SummeryTool_H.h"
 static Summery::StopWatch TIMER;
+
+const char* CREW_STATUS_FILE = "../data/output/crew_status_record.txt";
+
+
 //! end for debug
 
 Optimizer::Optimizer() {	
-	_column_generation = new ColumnGeneration();
+	//_column_generation = new ColumnGeneration();
 }
 Optimizer::~Optimizer() {
 	delete _crewNet;
@@ -31,6 +36,10 @@ void Optimizer::optimize() {
 	TIMER.Stop();
 	TIMER.printElapsed();
 
+	OutputHandler output_handler;
+	std::stringstream cur_day_sch_file;
+	std::stringstream cur_day_crew_status_file;
+
 	
 	_begining_plan = getStartTimeOfDay(_segNet->nodeSet.front()->startDtLoc);
 	for (auto& crew : _optCrewSet) {
@@ -38,11 +47,15 @@ void Optimizer::optimize() {
 	}
 
 	clusterSegNode();
-	size_t length_plan = _day_segnode_map.size(); //TODO: 放在初始化的时候
-
-	for (size_t iter = 0; iter < length_plan; iter++) {
+	//size_t length_plan = _day_segnode_map.size(); //TODO: 放在初始化的时候 //8-15
+	
+	size_t iter = 0;
+	for (/*size_t iter = 0; iter < length_plan; iter++*/ //8-15
+		std::map<time_t, SegNodeSet>::iterator it = _daytime_segnode_map.begin(); it != _daytime_segnode_map.end(); it++) {
 		
-		setCurDayStartNodeSet(iter);
+		//setCurDayStartNodeSet(iter); //8-15
+		_cur_day_segnode_set = &it->second;
+		
 		_segNet->updateResourceAndSink();
 		_segNet->updateVirtualArcs(*_cur_day_segnode_set);
 		// 2.crew group searching
@@ -56,8 +69,26 @@ void Optimizer::optimize() {
 		initial_soln.getCurLocalPool();*/
 		//initial_soln
 		// 4.
-		_column_generation->init(initial_groups, *_crewNet, *_segNet, *_rules, *_penalty);
-		_column_generation->solve();
+		ColumnGeneration* column_generation = new ColumnGeneration();
+ 		column_generation->init(iter, initial_groups, *_crewNet, *_segNet, *_rules, *_penalty);
+		column_generation->solve();
+
+		Solution* cur_day_soln = new Solution(column_generation->getBestSoln());
+		soln_pool.emplace_back(cur_day_soln);
+		//update crew's and seg's status according cur day's decision
+		updateStatus(*cur_day_soln);
+
+		cur_day_sch_file.str("");
+		cur_day_crew_status_file.str("");
+		cur_day_sch_file << "../data/output/crew_schedule/schedule_day_" << std::to_string(iter + 1) << ".txt";
+		cur_day_crew_status_file << "../data/output/crew_schedule/crew_status_day_" << std::to_string(iter + 1) << ".txt";
+		//output_handler.writeSchedule(*cur_day_soln, *_cur_day_segnode_set, cur_day_sch_file.str());
+		//output_handler.writeCrewStatus(*cur_day_soln, cur_day_crew_status_file.str());
+		////记录整个周期crew的状态
+		//output_handler.writeCrewStatus(_optCrewSet, CREW_STATUS_FILE);
+
+		delete column_generation;
+		++iter;
 	}
 
 
@@ -116,21 +147,42 @@ void Optimizer::clusterSegNode() {
 }
 void Optimizer::setCurDayStartNodeSet(int curDay) {
 	time_t cur_day = _begining_plan + curDay * _SECONDS_ONE_DAY;
+	while (_daytime_segnode_map.find(cur_day) == _daytime_segnode_map.end()) {
+		cur_day += _SECONDS_ONE_DAY;
+	}
 	_cur_day_segnode_set = &_daytime_segnode_map[cur_day];
 }
 
+//! 当前阶段的duty的departureDt和crew在当前阶段开始时的endDtLoc之间的时间间隔，需要判断该间隔是否满足了day off
+//! 若该时间间隔超过day off，那么实际上，crew就是进行了一次day off
 void Optimizer::updateStatus(Solution& soln) {
-	auto pool = soln.column_pool;
-	for (size_t i = 0; i < pool->size(); i++) {
-		auto segnode_set = (*pool)[i]->_segpath->getNodeSequence();
+	ColumnPool& pool = soln.column_pool;
+	Column* col;
+	for (size_t i = 0; i < pool.size(); i++) {
+		col = pool[i];
+		auto segpath = col->_segpath;
+		
+		auto segnode_set = segpath->getNodeSequence();
 		for (auto& segnode : segnode_set) {
 			segnode->optSegment->setAssigned(true);
 		}
-		auto crew_set = (*pool)[i]->_crewgroup->getCrewGroup();
+
+		auto crew_set = col->_crewgroup->getCrewGroup();
 		for (auto& crew : crew_set) {
 			crew->workStatus->setAssigned(true);
 			//TODO: work time tobe updated
-
+			if (col->type == ColumnType::relax) {
+				crew->workStatus->endDtLoc += 86400;
+			}
+			else {
+				crew->workStatus->endDtLoc = segpath->endNode->endDtLoc;
+				crew->workStatus->restStation = segpath->endNode->arvStation;
+			}
+			
+			crew->workStatus->accumuFlyMin += segpath->total_fly_mint;
+			crew->workStatus->accumuCreditMin += segpath->total_credit_mint;
+			crew->workStatus->totalFlyMint += segpath->total_fly_mint;
+			crew->workStatus->totalCreditMint += segpath->total_credit_mint;
 		}
 
 	}

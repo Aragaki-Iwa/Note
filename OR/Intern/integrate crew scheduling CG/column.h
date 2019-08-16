@@ -4,14 +4,23 @@
 #include "Seg_Path.h"
 #include "Crew_Path.h"
 
+enum ColumnType 
+{
+	relax = 0,
+	duty = 1
+};
 
 class Column 
 {
 public:
-	Column() {};
+	Column() {
+		type = ColumnType::duty;
+	};
 	Column(SegPath& segPath, CrewGroup& crweGroup) {
 		_segpath = &segPath;
 		_crewgroup = &crweGroup;
+
+		type = ColumnType::duty;
 	}
 	~Column() {
 		_segpath = NULL;
@@ -23,7 +32,7 @@ public:
 	SegPath* _segpath;
 	CrewGroup* _crewgroup;
 
-	std::string type = "";
+	ColumnType type;
 };
 using ColumnPool = std::vector<Column*>;
 

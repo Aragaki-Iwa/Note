@@ -3,6 +3,7 @@
 #define CREW_PATH_H
 #include "pch.h"
 #include "IPath.h"
+#include "Seg_Path.h"
 
 class Opt_CREW;
 class CrewNode;
@@ -35,6 +36,11 @@ public:
 
 	virtual double getCost() const;
 	
+	//运算符重载
+	bool operator < (const CrewGroup &b) const { return this->getCost() < b.getCost(); }
+	bool operator > (const CrewGroup &b) const { return this->getCost() > b.getCost(); }
+
+
 	void computeCost();
 	std::vector<CrewNode*>& getNodeSequence() { return _crewNodeSequence; }
 	void setCrewGroup();	
@@ -44,11 +50,16 @@ public:
 	std::vector<int> optcrew_id_set;
 
 	/*8-6-2019*/
+	
+	//! 包括具体配比信息的确定
 	void setBasicProperties();
 	std::map<std::string, int> spetialCredentials; //只要有一个crew没有特殊资质，则整个group都没有	
 	int max_fly_mint;
 	int max_credit_mint;
 	time_t endDtLoc;
+	
+
+	const compoMode* compo_mode;
 
 
 private:
@@ -56,6 +67,7 @@ private:
 	std::vector<CrewNode*> _crewNodeSequence;
 	CrewGroupPrice _crewsPrice;
 	std::vector<Opt_CREW*> _crewGroup;
+
 };
 
 #endif // !CREW_PATH_H

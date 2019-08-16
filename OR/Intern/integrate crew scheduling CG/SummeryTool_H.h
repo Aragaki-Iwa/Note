@@ -48,7 +48,7 @@ namespace Summery
 			return elapsed / 1000000.0;
 		}
 
-		void printElapsed(const string& unit = "s") {
+		void printElapsed(const std::string& unit = "s") {
 			long long elap_time = elapsed;
 			if (unit == "s") { elap_time = Elapsed_s(); }
 			else if (unit == "ms") { elap_time = Elapsed_ms(); }

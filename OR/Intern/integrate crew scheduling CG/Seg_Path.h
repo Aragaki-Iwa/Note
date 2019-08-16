@@ -34,25 +34,26 @@ public:
 	//! simple getter
 	virtual double getCost() const;
 
-	void init(const Penalty& penaltySetting);
+	void init(/*const Penalty& penaltySetting*/);
 	//! 根据路径内容计算各项cost
 	//! 最后求和
 	//! 1.fly_time
 	//! 2.dhd
 	//! 3.special_credential
-	void computeCost(std::vector<costTuple>& costTuples);
+	void computeCost(/*std::vector<costTuple>& costTuples*/const Penalty& penaltySetting);
 	std::vector<SegNode*>& getNodeSequence() { return _segNodeSequence; }	
+	
 
-	//void setCrewGroup();
-	//CrewGroup& getCrewGroup() { return *_crewGroup; };
-
-	SegPathCost& getSegPathCost() { return _segPathCost; }
+	//SegPathCost& getSegPathCost() { return _segPathCost; }
 
 	/*8-5-2019*/
 	//! parameter <optSegSet> 中的元素顺序在单天不会改变
 	//！找到该条SegPath包含的Opt_Segment在<optSegSet>中的下标
 	//! 若node是dhd，则下标设为-1，表示不存在
 	void setSegIndexSet(const std::vector<Opt_Segment*>& curDayoptSegSet);
+	
+	const compoMode* getCompoMode() { return _path_compoMode; }
+
 	//for Cplex model
 	std::vector<int> optseg_id_sequence;
 
@@ -62,15 +63,19 @@ public:
 	SegNode* endNode;
 	int total_fly_mint;
 	int total_credit_mint; //TODO：记得赋值
+	int total_dhd;
+	//int total_long_stop_mint;
 
 	double total_dual_price = INIT_PRICE;
 private:
+	double _total_cost = 0;
+	
 	int _nbSegNodes;
 	int _nbCrews;
 	std::vector<SegNode*> _segNodeSequence;	
 	//CrewGroup* _crewGroup;	
 
-	SegPathCost _segPathCost;
+	//SegPathCost _segPathCost;
 	const Penalty* _penalty_setting;
 
 	// basic properties

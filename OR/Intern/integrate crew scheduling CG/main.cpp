@@ -11,8 +11,10 @@
 
 using namespace std;
 using namespace Summery;
-int main()
-{
+int main() {
+
+	
+
 	crewCsvReader crew_csv_reader;
 	vector<string> objNameSet = { "Flight","Base","Crew","CrewRank","CrewBase", "FlightComposition", "Composition" };
 	string input_dir = "../data/input/";
@@ -25,7 +27,7 @@ int main()
 	rules.setHorizonRules(15, 600, 100, 720, 80, 400, 80, 600);
 	//rules.setDayOffPara(2000, 2160, 300);
 	rules.setWeekPara(7200, 1200, 2160, 120);	
-	Penalty penalty(1, 1, 1, 1, 1, 1, 1);
+	Penalty penalty(1, 1, 100, 1, 1, 1, 1);
 
 	StopWatch sw;
 	sw.Start();

@@ -8,7 +8,8 @@
 #include "ilcplex\ilocplex.h"
 #include <memory>
 
-const int PENALTY_UNCOVER = 7000;
+
+const int PENALTY_UNCOVER = 70000;
 
 class MasterProblem 
 {
@@ -17,15 +18,15 @@ public:
 	~MasterProblem();
 
 	void initSetting();
-	void addRestColumns();
+	//void addRestColumns();
 	
 	void init(ColumnPool* columnpool_ptr, std::vector<Opt_Segment*>& segSet, std::vector<CrewNode*>& crewNodeSet);
 	//! 记录crew的初始飞时
-	void initParameters();
+	void initParameters();	
 	void buildModel();
-	void exportModel();	
+	void exportModel(const std::string& curDayStrint, int iter);
 	int solve();
-	void writeSoln();
+	void writeSoln(const std::string& curDayStr, int iter);
 	double getObjValue() const { return _objValue; }
 	std::vector<double>& getSegCoverDuals();
 	std::vector<double>& getCrewAssignDuals();
@@ -38,6 +39,7 @@ public:
 
 	ColumnPool* global_pool; //主问题空间的列集合
 	IloModel _model;
+	IloCplex _cplex;
 	
 private:
 	//! end all except _env
@@ -49,7 +51,7 @@ private:
 	void sortBySegNums();*/
 
 	IloEnv _env;
-	IloCplex _cplex;
+	
 	
 	IloObjective _obj;
 	double _objValue;
