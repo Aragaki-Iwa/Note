@@ -54,10 +54,10 @@ public:
 	//! 包括具体配比信息的确定
 	void setBasicProperties();
 	std::map<std::string, int> spetialCredentials; //只要有一个crew没有特殊资质，则整个group都没有	
-	int max_fly_mint;
+	int max_total_fly_mint;
 	int max_credit_mint;
 	time_t endDtLoc;
-	
+	std::string curStation;
 
 	const compoMode* compo_mode;
 

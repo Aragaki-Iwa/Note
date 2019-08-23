@@ -52,7 +52,7 @@ public:
 	//! 若node是dhd，则下标设为-1，表示不存在
 	void setSegIndexSet(const std::vector<Opt_Segment*>& curDayoptSegSet);
 	
-	const compoMode* getCompoMode() { return _path_compoMode; }
+	const compoMode* getCompoMode() const { return _path_compoMode; }
 
 	//for Cplex model
 	std::vector<int> optseg_id_sequence;
@@ -84,6 +84,8 @@ private:
 	const csvComposition* _path_composition;
 	//一旦初始化便不会改变
 	const compoMode* _path_compoMode;
+
+	std::map<std::string, int> _rank_to_num_map;
 
 };
 

@@ -15,8 +15,8 @@ static Summery::StopWatch TIMER;
 
 const char* CREW_STATUS_FILE = "../data/output/crew_status_record.txt";
 
-
 //! end for debug
+const int kSEVEN_DAYS = 7 * 24 * 60;
 
 Optimizer::Optimizer() {	
 	//_column_generation = new ColumnGeneration();
@@ -50,11 +50,13 @@ void Optimizer::optimize() {
 	//size_t length_plan = _day_segnode_map.size(); //TODO: 放在初始化的时候 //8-15
 	
 	size_t iter = 0;
+	time_t start_cur_day;
 	for (/*size_t iter = 0; iter < length_plan; iter++*/ //8-15
 		std::map<time_t, SegNodeSet>::iterator it = _daytime_segnode_map.begin(); it != _daytime_segnode_map.end(); it++) {
 		
 		//setCurDayStartNodeSet(iter); //8-15
 		_cur_day_segnode_set = &it->second;
+		start_cur_day = it->first;
 		
 		_segNet->updateResourceAndSink();
 		_segNet->updateVirtualArcs(*_cur_day_segnode_set);
@@ -76,22 +78,27 @@ void Optimizer::optimize() {
 		Solution* cur_day_soln = new Solution(column_generation->getBestSoln());
 		soln_pool.emplace_back(cur_day_soln);
 		//update crew's and seg's status according cur day's decision
-		updateStatus(*cur_day_soln);
+		updateStatus(start_cur_day, *cur_day_soln);
 
 		cur_day_sch_file.str("");
 		cur_day_crew_status_file.str("");
 		cur_day_sch_file << "../data/output/crew_schedule/schedule_day_" << std::to_string(iter + 1) << ".txt";
 		cur_day_crew_status_file << "../data/output/crew_schedule/crew_status_day_" << std::to_string(iter + 1) << ".txt";
-		//output_handler.writeSchedule(*cur_day_soln, *_cur_day_segnode_set, cur_day_sch_file.str());
-		//output_handler.writeCrewStatus(*cur_day_soln, cur_day_crew_status_file.str());
-		////记录整个周期crew的状态
-		//output_handler.writeCrewStatus(_optCrewSet, CREW_STATUS_FILE);
+		output_handler.writeSchedule(*cur_day_soln, *_cur_day_segnode_set, cur_day_sch_file.str());
+		output_handler.writeCrewStatus(*cur_day_soln, cur_day_crew_status_file.str());
+		//记录整个周期crew的状态
+		output_handler.writeCrewStatus(_optCrewSet, CREW_STATUS_FILE);
 
 		delete column_generation;
 		++iter;
 	}
 
 
+	//statistic
+	std::string crew_statistic_csv = "../data/output/statistic files/crew_statistic.csv";
+	std::string uncovered_flights_txt = "../data/output/statistic files/uncovered_flights.txt";
+	output_handler.writeCrewStatistic(_optCrewSet, crew_statistic_csv.data());
+	output_handler.writeUncoveredFlight(_segNet->nodeSet, uncovered_flights_txt.data());
 	
 
 }
@@ -155,8 +162,9 @@ void Optimizer::setCurDayStartNodeSet(int curDay) {
 
 //! 当前阶段的duty的departureDt和crew在当前阶段开始时的endDtLoc之间的时间间隔，需要判断该间隔是否满足了day off
 //! 若该时间间隔超过day off，那么实际上，crew就是进行了一次day off
-void Optimizer::updateStatus(Solution& soln) {
+void Optimizer::updateStatus(const time_t startCurDay, Solution& soln) {
 	ColumnPool& pool = soln.column_pool;
+	time_t endCurDay = startCurDay + 86400 - 1;
 	Column* col;
 	for (size_t i = 0; i < pool.size(); i++) {
 		col = pool[i];
@@ -167,22 +175,38 @@ void Optimizer::updateStatus(Solution& soln) {
 			segnode->optSegment->setAssigned(true);
 		}
 
+		time_t 	relax_end_loc = col->type == ColumnType::duty ?
+						  segpath->startNode->startDtLoc : endCurDay;
+		
+		
 		auto crew_set = col->_crewgroup->getCrewGroup();
+		CrewStatus* status;
 		for (auto& crew : crew_set) {
-			crew->workStatus->setAssigned(true);
-			//TODO: work time tobe updated
-			if (col->type == ColumnType::relax) {
-				crew->workStatus->endDtLoc += 86400;
-			}
-			else {
-				crew->workStatus->endDtLoc = segpath->endNode->endDtLoc;
-				crew->workStatus->restStation = segpath->endNode->arvStation;
-			}
+			status = crew->workStatus;
+			status->setAssigned(true);
 			
-			crew->workStatus->accumuFlyMin += segpath->total_fly_mint;
-			crew->workStatus->accumuCreditMin += segpath->total_credit_mint;
-			crew->workStatus->totalFlyMint += segpath->total_fly_mint;
-			crew->workStatus->totalCreditMint += segpath->total_credit_mint;
+			status->accumuFlyMin += segpath->total_fly_mint;
+			status->accumuCreditMin += segpath->total_credit_mint;
+			status->sevenDayTotalFlyMint += segpath->total_fly_mint;
+			
+			status->wholePlanTotalFlyMint += segpath->total_fly_mint;
+			status->wholePlanTotalCreditMint += segpath->total_credit_mint;
+
+			int duration = relax_end_loc - status->endDtLoc;
+			if (duration >= _rules->minDayOffMin*60) {
+				status->accumuFlyMin = 0;
+				status->accumuCreditMin = 0;
+				status->wholePlanTotalCreditMint -= duration;
+			}
+			if (col->type == ColumnType::duty) {			
+				status->endDtLoc = segpath->endNode->endDtLoc;
+				status->restStation = segpath->endNode->arvStation;
+			}
+			if (endCurDay - status->dateLocFlyBegining >= kSEVEN_DAYS) {
+				status->dateLocFlyBegining = endCurDay + 1;
+				status->sevenDayTotalFlyMint = 0;
+			}
+
 		}
 
 	}
@@ -205,7 +229,8 @@ void Optimizer::init() {
 	_inputHandler.sortCrewRank();
 	
 	_inputHandler.matchOptSegmentSet(&_optSegSet);
-	_inputHandler.matchOptSegmentAndComposition(&_optSegSet);	
+	_inputHandler.matchOptSegmentAndComposition(&_optSegSet);
+	_inputHandler.setRankToNumMapOfOptSegment(&_optSegSet);
 	_inputHandler.matchOptCrewSet(&_optCrewSet);	
 	_inputHandler.matchOptCrewAndRank(&_optCrewSet);
 	_inputHandler.matchOptCrewAndBase(&_optCrewSet);	
@@ -213,8 +238,9 @@ void Optimizer::init() {
 	
 	for (auto& crew : _optCrewSet) {
 		crew->setCurRank();
-		crew->setCurPosition();
+		crew->setCurPosition();		
 	}
+
 	_crewNet = new CrewNetwork(&_optCrewSet, _rules);
 	_segNet = new SegNetwork(&_optSegSet, &_inputHandler.getBaseSet(), _rules);
 	
@@ -229,6 +255,7 @@ void Optimizer::createCase() {
 	
 	_inputHandler.randomSetCrewSkills(&_optCrewSet);
 	_inputHandler.setRankCombination(_rules);
+	_inputHandler.setRankCombination_OnePermutation(_rules);
 
 	_optCrewSet = *_inputHandler.getPilotSet(_optCrewSet);
 

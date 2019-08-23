@@ -14,12 +14,14 @@ class Column
 {
 public:
 	Column() {
+		cost = FIXED_COST;
 		type = ColumnType::duty;
 	};
 	Column(SegPath& segPath, CrewGroup& crweGroup) {
 		_segpath = &segPath;
 		_crewgroup = &crweGroup;
 
+		cost = FIXED_COST;
 		type = ColumnType::duty;
 	}
 	~Column() {
@@ -27,6 +29,7 @@ public:
 		_crewgroup = NULL;
 	}
 	double cost;
+	const int FIXED_COST = 0;//100; //¹Ì¶¨³É±¾
 	double reduced_cost;
 
 	SegPath* _segpath;

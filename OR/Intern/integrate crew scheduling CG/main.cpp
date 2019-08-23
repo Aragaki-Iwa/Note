@@ -14,7 +14,6 @@ using namespace Summery;
 int main() {
 
 	
-
 	crewCsvReader crew_csv_reader;
 	vector<string> objNameSet = { "Flight","Base","Crew","CrewRank","CrewBase", "FlightComposition", "Composition" };
 	string input_dir = "../data/input/";
@@ -26,8 +25,8 @@ int main() {
 	CrewRules rules;
 	rules.setHorizonRules(15, 600, 100, 720, 80, 400, 80, 600);
 	//rules.setDayOffPara(2000, 2160, 300);
-	rules.setWeekPara(7200, 1200, 2160, 120);	
-	Penalty penalty(1, 1, 100, 1, 1, 1, 1);
+	rules.setWeekPara(7200, 1200, 2160, 4320);	
+	Penalty penalty(1, 1, 1000, 1, 1, 1, 1);
 
 	StopWatch sw;
 	sw.Start();
@@ -45,6 +44,8 @@ int main() {
 	sw.Stop();
 	cout << "set all permutations of combinations spend time: " << sw.Elapsed_s() << " s\n";
 	rules.sortSeqMaps();
+
+	
 
 	sw.Restart();
 	opt.optimize();

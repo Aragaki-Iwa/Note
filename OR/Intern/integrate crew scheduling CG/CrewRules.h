@@ -36,7 +36,7 @@ public:
 
 
 static std::vector<std::string> CAP_positions{ "C1","C2", "C4", "T1", "T2", "T3", "K1", "K2", "K3" };
-static std::vector<std::string> FO_positions{ "E1", "F1", "F2", "F3", "F4", "F5", "F6", "J1", "J2" };
+static std::vector<std::string> FO_positions{ "F1", "F2", "F3", "F4", "F5", "F6", "J1", "J2" };
 
 typedef struct HorizontalRules
 {
@@ -69,7 +69,7 @@ public:
 		int maxFlyMin,
 		int minDutyMin,
 		int maxDutyMin);
-	void setWeekPara(int maxCreditMinutes, int maxWeekFlyMinutes, int minDayOffMinutes, int allowOverCreditMinutes);
+	void setWeekPara(int maxCreditMinutes, int maxWeekFlyMinutes, int minDayOffMinutes, int maxDayOffMinutes/*allowOverCreditMinutes*/);
 		
 	void addRankCombination(const std::string& rankCombination);
 	void setSeqMaps();
@@ -85,12 +85,17 @@ public:
 	int maxWeekFlyMin;	
 	//day off至少休息时间
 	int minDayOffMin;
+	//day off至多休息时间
+	int maxDayOffMin;
 	//允许超过最大执勤时长的量
-	int allowOverCreditMin;
+	//int allowOverCreditMin;
 
 	std::vector<std::string> rankCombinationSet;
 	std::map<std::string, PosOrderSeqvec*> _pos_order_seqs;
 	std::map<int, OrderPosSeqvec*> _order_pos_seqs;
+
+	// added-20190819
+	std::map<std::string, std::vector<std::string>> compo_sequences_map;
 };
 
 #endif // !CREW_RULES_H

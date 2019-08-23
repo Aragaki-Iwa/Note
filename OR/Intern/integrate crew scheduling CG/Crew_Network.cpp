@@ -51,7 +51,7 @@ CrewNetwork::~CrewNetwork() {
 }
 void CrewNetwork::createNetwork() {
 	setOptCrewNodeSet();
-	createOptCrewArcs(); //for debug 8-7-2019 先不执行这句，因为太慢
+	createOptCrewArcs(); 
 	std::cout << "number of crew arcs: " << arcSet.size() << "\n";
 	createVirtualArcs();
 	std::cout << "number of crew arcs, include virtrual arcs: " << arcSet.size() << "\n";

@@ -22,11 +22,12 @@ void CrewRules::setHorizonRules(int minTransMin,
 	horizon_rules->minDutyMin = minDutyMin;
 	horizon_rules->maxDutyMin = maxDutyMin;		
 }
-void CrewRules::setWeekPara(int maxCreditMinutes, int maxWeekFlyMinutes, int minDayOffMinutes, int allowOverCreditMinutes) {
+void CrewRules::setWeekPara(int maxCreditMinutes, int maxWeekFlyMinutes, int minDayOffMinutes, int maxDayOffMinutes/*allowOverCreditMinutes*/) {
 	maxCreditMin = maxCreditMinutes;
 	maxWeekFlyMin = maxWeekFlyMinutes;
 	minDayOffMin = minDayOffMinutes;
-	allowOverCreditMin = allowOverCreditMinutes;
+	//allowOverCreditMin = allowOverCreditMinutes;
+	maxDayOffMin = maxDayOffMinutes;
 }
 
 void CrewRules::addRankCombination(const std::string& rankCombination) {

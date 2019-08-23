@@ -24,6 +24,9 @@ class CrewStatus;
 typedef std::vector<CREW_RANK*> CrewRankAry;
 typedef std::vector<CREW_BASE*> CrewBaseAry;
 
+
+
+
 class Opt_CREW
 {
 public:
@@ -100,6 +103,10 @@ public:
 	void setCompositions(csvActivityComposition* fltCompo, csvComposition* composition);
 	csvActivityComposition* getFltComposition() const { return _fltCompo; }
 	csvComposition* getCompositon()const { return _composition; }
+	//! 
+	void setRankToNumMap();
+	std::map<std::string, int>& getRankToNumMap() { return _rank_to_num; };
+	
 	bool getAssigned();
 	void setAssigned(bool flag);
 
@@ -138,6 +145,7 @@ private:
 
 	csvActivityComposition* _fltCompo;
 	csvComposition* _composition;
+	std::map<std::string, int> _rank_to_num; //该segment对应rank需要的人数
 
 	bool _assigned;
 
@@ -180,10 +188,19 @@ public:
 	time_t endDtLoc;
 	std::string restStation;
 
-	//周期开始飞行到当前的累计flymin
-	int totalFlyMint;
-	//周期开始执勤到当前的累计时间
-	int totalCreditMint;
+	//记录7天内的累计flymin
+	int sevenDayTotalFlyMint;
+	//为了记录7天内总飞时，
+	//每7天刷新一次
+	time_t dateLocFlyBegining;
+	
+	//统计指标
+
+	//整个周期开始到当前的累计飞行时间
+	int wholePlanTotalFlyMint;
+	//整个周期开始执勤到当前的累计时间
+	int wholePlanTotalCreditMint;	
+	
 
 private:
 

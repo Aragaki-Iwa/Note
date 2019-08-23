@@ -44,7 +44,6 @@ void MasterProblem::end() {
 	_model.end();
 	_cplex.end();
 	
-
 	
 }
 
@@ -64,7 +63,7 @@ void MasterProblem::init(ColumnPool* columnpool_ptr, std::vector<Opt_Segment*>& 
 	
 	_init_crew_fly_mint.reserve(_crew_num);	
 
-	_dvars_path = IloNumVarArray(_env, global_pool->size(), 0, 1, IloNumVar::Type::Float);
+	_dvars_path = IloNumVarArray(_env, global_pool->size(), 0.0001, 1.0001, IloNumVar::Type::Float);
 	_dvars_uncover = IloNumVarArray(_env, _seg_num, 0, 1, IloNumVar::Type::Float);
 	//_dvar_upper_flytime = IloNumVar(_env, 0, 10000, IloNumVar::Type::Float, "upper_fly_min");
 	//_dvar_lower_flytime = IloNumVar(_env, 0, 10000, IloNumVar::Type::Float, "lower_fly_min"); //TODO：上下限具体取值需根据crew和path的飞时来确定
@@ -163,10 +162,13 @@ void MasterProblem::addObjFunction() {
 //}
 
 void MasterProblem::addConstraints2() {	
-	size_t real_col_end = global_pool->size() - _crew_num; //_crew_num个Column是休息column，但是在之后的迭代中，不断有新column添加，最好是把rest column放在最前面？
+	//size_t real_col_end = global_pool->size() - _crew_num; 
+	//_crew_num个Column是休息column，但是在之后的迭代中，不断有新column添加，最好是把rest column放在最前面？
+	//global最前面为rest column
 	for (size_t i = 0; i < _seg_num; i++) {
 		IloExpr ct_cover(_env);
-		for (size_t j = 0; j < real_col_end; j++) {		
+		/*for (size_t j = 0; j < real_col_end; j++) {*/
+		for (size_t j = _crew_num; j < global_pool->size(); j++) {
 			auto id_seq = (*global_pool)[j]->_segpath->optseg_id_sequence;
 			if (std::find(id_seq.begin(), id_seq.end(), i) != id_seq.end()) {
 				ct_cover += _dvars_path[j];
@@ -290,10 +292,9 @@ void MasterProblem::addNewColumns(ColumnPool& newPool) {
 			STOP_WATCHER.Restart();
 		}
 
-
 		global_pool->emplace_back(newPool[i]); //NOTE:改变了CG中的globalPool
 
-		IloNumVar col_var = IloNumVar(_env, 0, 1, IloNumVar::Type::Float);		
+		IloNumVar col_var = IloNumVar(_env, 0.0001, 1.0001, IloNumVar::Type::Float);		
 		col_var.setName(std::to_string(index++).data());
 		
 		_dvars_path.add(col_var);

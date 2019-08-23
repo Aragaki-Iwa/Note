@@ -39,6 +39,8 @@ public:
 	void matchOptSegmentAndComposition(std::vector<Opt_Segment*>* optSegSet
 		/*std::vector<csvActivityComposition*>* fltCompoSet,
 		std::vector<csvComposition*>* compoSet*/);
+	//! added 20190822
+	void setRankToNumMapOfOptSegment(std::vector<Opt_Segment*>* optSegSet);
 	void matchOptCrewAndRank(std::vector<Opt_CREW*>* optCrewSet/*, std::vector<CREW_RANK*>* crewrankSet*/);
 	void matchOptCrewAndBase(std::vector<Opt_CREW*>* optCrewSet/*, std::vector<CREW_BASE*>* crewbaseSet*/);
 	
@@ -56,6 +58,8 @@ public:
 
 	void randomSetCrewSkills(std::vector<Opt_CREW*>* optCrewSet, double percent = 0.3);
 	void setRankCombination(CrewRules* rules);
+	//! 按配比记录对应的号位搭配，用组合的一个排列来代表这个组合
+	void setRankCombination_OnePermutation(CrewRules* rules);
 	
 private:
 	void typeTrans(std::vector<void*>& objSet, const std::string& objName, void* outObjSet);

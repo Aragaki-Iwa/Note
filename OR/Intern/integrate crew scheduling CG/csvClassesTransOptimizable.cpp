@@ -1,6 +1,7 @@
 #include "csvClassesTransOptimizable.h"
 #include "..\csvReader\crewDB_mine.h"
 #include "..\csvReader\Segment_mine.h"
+#include <cctype>
 
 Opt_CREW::Opt_CREW(CREW* crew) {
 	_crew = crew;
@@ -55,6 +56,41 @@ void Opt_Segment::setCompositions(csvActivityComposition* fltCompo, csvCompositi
 	_composition = composition;
 }
 
+void Opt_Segment::setRankToNumMap() {
+	std::string compo_name = this->_composition->nameDesc;
+	//根据配比得到具体rank所需人数
+	size_t len = compo_name.size();
+	std::vector<int> rank_start_end_indexs;	// 子字符串，即rank的起始index为一对	
+	for (size_t pos = 0; pos != len; pos++) {
+		while (pos != len && '0' <= compo_name[pos] && compo_name[pos] <= '9') {
+			++pos;
+		}
+		rank_start_end_indexs.push_back(pos);
+		while (pos != len && ('0' >= compo_name[pos] || compo_name[pos] >= '9')) {
+			++pos;
+		}
+		rank_start_end_indexs.push_back(--pos);
+	}
+
+	std::vector<int> nums;
+	std::vector<std::string> ranks;
+	size_t pos = 0;
+	size_t s;
+	size_t e;
+	for (size_t i = 0; i < rank_start_end_indexs.size(); i++) {
+		std::string num_str = compo_name.substr(pos, rank_start_end_indexs[i] - pos);
+		nums.push_back(std::stoi(num_str));
+		s = rank_start_end_indexs[i];
+		e = rank_start_end_indexs[++i];
+		std::string rank = compo_name.substr(s, e - s + 1);
+		ranks.push_back(rank);
+		pos = rank_start_end_indexs[i] + 1;
+		_rank_to_num[rank] = std::stoi(num_str);
+	}
+
+}
+//int Opt_Segment::getNumOfRank(const std::string& rank) { return _rank_to_num[rank]; }
+
 void Opt_Segment::setAssigned(bool flag) {
 	_assigned = flag;
 }
@@ -86,8 +122,11 @@ void CrewStatus::setInitStatus(const time_t initialTime, const std::string& init
 	accumuCreditMin = 0;
 	dayoffMin = 0;
 
-	totalFlyMint = 0;
-	totalCreditMint = 0;
+	sevenDayTotalFlyMint = 0;
+	dateLocFlyBegining = initialTime;
+	
+	wholePlanTotalFlyMint = 0;
+	wholePlanTotalCreditMint = 0;
 
 	_assigned = false;
 }

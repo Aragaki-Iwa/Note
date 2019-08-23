@@ -9,7 +9,7 @@
 #include <memory>
 
 
-const int PENALTY_UNCOVER = 70000;
+const int PENALTY_UNCOVER = 100000;
 
 class MasterProblem 
 {

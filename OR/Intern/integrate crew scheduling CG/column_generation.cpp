@@ -53,77 +53,83 @@ void ColumnGeneration::solve() {
 	_sub_pro->setCurDaySegSet();
 	_sub_pro->setIndexOfCurSeg();
 	//_sub_pro->labelSpecialSegPath()
-	_sub_pro->estimateMeanFlyMin();
-
+	_sub_pro->groupingSegPathByComposition();
+	//_sub_pro->estimateMeanFlyMin();
+	_sub_pro->estimateMeanFlyMinPrecisly(); //changed 20190822
 
 	_sub_pro->addRestColumns();
-	//create initial column pool
-	_sub_pro->matchGroupAndPath();	
+	////create initial column pool
+	//_sub_pro->matchGroupAndPath();	
 	
-
+	bool local_search = true;
 	_global_pool->swap(_sub_pro->getCurLocalPool()); //sub_pro中的列池变为空
 
 	_master->init(_global_pool, _sub_pro->getCurDaySegSet(), *_crew_node_set); //NOTE：后两个参数只需要传一次，改！
 	_master->initSetting();
 	_master->initParameters();
-	//_master->addRestColumns();
-
-
+	
 	_master->buildModel();
 	for (size_t i = 1; i < _max_num_iter; i++) {				
 		//debug
 		std::cout << "iter: " << std::to_string(i) << "\n";
 		
-		//_master->exportModel(_cur_day_str, i);
+		_master->exportModel(_cur_day_str, i);
 
 		result = _master->solve();
 		
-		//_master->writeSoln(_cur_day_str, i);
+		_master->writeSoln(_cur_day_str, i);
 
 		_lb = _master->getObjValue();
-		std::cout << "----------------------the cur LB is " << _lb << "----------------------" << std::endl;
+		std::cout << "--------------------------------------------the cur LB is " << _lb << "--------------------------------------------" << std::endl;
 
 		//! TODO：一旦覆盖率达到，则无需再次检查，即isCaverageHigh()返回true后，就之后的迭代都不必再调用
 		if (i % _frequency_solve_mip == 0 && isCoverageHigh() && result == 1) {
-			//! 每隔_frequency_solve_mip次求整数解
-			solveMIP();
-			double obj_value_mip = _mip_cplex.getObjValue();
-			std::cout << "----------------------the cur UB is " << obj_value_mip << "----------------------" << std::endl;
-			Solution* new_soln = new Solution();
-			getFeasibleSolution(new_soln);
-			_solution_pool.emplace_back(new_soln);
-			if (obj_value_mip < _ub) {
-				_ub = obj_value_mip;
-				_best_solution_pool.clear();
-				_best_solution_pool.emplace_back(new_soln);
-			}
-			else if (obj_value_mip == _ub) {
-				_best_solution_pool.emplace_back(new_soln);
-			}
-
-			_mip_model.end();
-			_mip_cplex.end();
+			
+			////! 每隔_frequency_solve_mip次求整数解
+			//solveMIP();
+			//double obj_value_mip = _mip_cplex.getObjValue();
+			//std::cout << "----------------------the cur UB is " << obj_value_mip << "----------------------" << std::endl;
+			//Solution* new_soln = new Solution();
+			//getFeasibleSolution(new_soln);
+			//_solution_pool.emplace_back(new_soln);
+			//if (obj_value_mip < _ub) {
+			//	_ub = obj_value_mip;
+			//	_best_solution_pool.clear();
+			//	_best_solution_pool.emplace_back(new_soln);
+			//}
+			//else if (obj_value_mip == _ub) {
+			//	_best_solution_pool.emplace_back(new_soln);
+			//}
+			//
+			//_mip_model.end();
+			//_mip_cplex.end();
 		}
 
 		_sub_pro->updateDuals(_master->getSegCoverDuals(), _master->getCrewAssignDuals());
-		_sub_pro->findGroups();		
 		_sub_pro->getCurLocalPool().clear(); //将上次迭代的列清除
-		_sub_pro->matchGroupAndPath();
-
-		ColumnPool& local_pool = _sub_pro->getCurLocalPool();
-		std::cout << "find new columns " << local_pool.size() << "\n";
-
-		//TODO: 实际是top k，后续优化
-		std::sort(local_pool.begin(), local_pool.end(),
-			[](const Column* a, const Column* b) {return a->reduced_cost < b->reduced_cost; });
-		int num_saved_columns = std::min(1000, (int)local_pool.size());
 		
-		
-		for (ColumnPool::iterator it = local_pool.begin() + num_saved_columns; it != local_pool.end();) {
-			delete *it;
-			it = local_pool.erase(it);
+		if (local_search) {
+			_sub_pro->findGroups();
+			_sub_pro->matchGroupAndPath();
+			ColumnPool& local_pool = _sub_pro->getCurLocalPool();
+			std::cout << "-----find new columns " << local_pool.size() << "\n";
+			//TODO: 实际是top k，后续优化
+			std::sort(local_pool.begin(), local_pool.end(),
+				[](const Column* a, const Column* b) {return a->reduced_cost < b->reduced_cost; });
+			int num_saved_columns = std::min(1000, (int)local_pool.size());
+			for (ColumnPool::iterator it = local_pool.begin() + num_saved_columns; it != local_pool.end();) {
+				delete *it;
+				it = local_pool.erase(it);
+			}
 		}
-				
+		if (_sub_pro->getCurLocalPool().size() == 0) {
+			std::cout << "-----start accuraccy strategy" << _sub_pro->getCurLocalPool().size() << "\n";
+			_sub_pro->findColumnSet(); //changed-20190821 
+			std::cout << "-----accuraccy strategy find new columns " << _sub_pro->getCurLocalPool().size() << "\n";
+			
+			local_search = false;
+		}
+		
 
 		if (_sub_pro->getCurLocalPool().size() == 0) {
 			std::cout << "cur day's RMP met optimal \n";
@@ -141,15 +147,15 @@ void ColumnGeneration::solve() {
 
 				flag = true;
 			}			
-			std::cout << "----------------------the optimal obj value is " << obj_value_opt << "----------------------" << std::endl;
+			std::cout << "--------------------------------------------the optimal obj value is " << obj_value_opt << "---------------------------------------" << std::endl;
 			
-			/*std::string opt_model_file(MIP_FILE_PATH);
+			std::string opt_model_file(MIP_FILE_PATH);
 			opt_model_file += "opt_mip_model_cur_day_" + _cur_day_str + ".lp";
 			std::string opt_soln_file(MIP_FILE_PATH);
 			opt_soln_file+= "opt_mip_soln_cur_day" + _cur_day_str + ".sln";
 
 			_mip_cplex.exportModel(opt_model_file.data());
-			_mip_cplex.writeSolution(opt_soln_file.data());*/
+			_mip_cplex.writeSolution(opt_soln_file.data());
 
 
 			/*output uncovered segments and rest-crews*/ 						
@@ -193,10 +199,10 @@ void ColumnGeneration::solve() {
 				_best_solution_pool.clear();
 				_best_solution_pool.emplace_back(opt_soln);
 			}
-			_mip_model.end();			
+			/*_mip_model.end();			
 			if (!flag) {
 				_mip_cplex.end();
-			}
+			}*/
 			
 			break;
 		}
@@ -223,7 +229,7 @@ bool ColumnGeneration::isFeasibelSoln(IloNumVarArray& dvars) {
 	const double kEPSILON = 1e-8;	
 	for (size_t i = 0; i < dvars.getSize(); i++) {		
 		if (!(std::abs(_master->_cplex.getValue(dvars[i]) - 1) <= kEPSILON || std::abs(_master->_cplex.getValue(dvars[i]) - 0) <= kEPSILON)) {
-			std::cout << "<i: " << std::to_string(i) << ", value: " << _master->_cplex.getValue(dvars[i]) << ">\n";
+			//std::cout << "<i: " << std::to_string(i) << ", value: " << _master->_cplex.getValue(dvars[i]) << ">\n";
 			return false;
 		}
 	}
@@ -236,6 +242,13 @@ int ColumnGeneration::solveMIP() {
 	IloEnv env = _master->_model.getEnv();
 	_mip_model = IloModel(env);	
 	_mip_model.add(_master->_model);
+	
+	
+	
+	for (int i = 0; i < _master->getPathDvar().getSize(); i++) {
+		_master->getPathDvar()[i].setBounds(0, 1);
+	}
+
 	_mip_model.add(IloConversion(env, _master->getPathDvar(), IloNumVar::Type::Int));
 	_mip_model.add(IloConversion(env, _master->getUncoverDvar(), IloNumVar::Type::Int));
 	
@@ -263,9 +276,9 @@ void ColumnGeneration::getFeasibleSolution(Solution* soln) {
 	std::cout << "feasible soln dvar vales \n";
 	for (size_t i = 0; i < values.getSize(); i++) {
 		//std::cout << "<i," << std::to_string(i) << ", value:" << values[i] << ">\n";
-		if (values[i] > 0 && (*_global_pool)[i]->type == ColumnType::duty) {
+		if (values[i] > 0.99 /*&& (*_global_pool)[i]->type == ColumnType::duty*/) {
 			soln->column_pool.emplace_back((*_global_pool)[i]);
-			std::cout << "<i," << std::to_string(i) << ", value:" << values[i] << ">\n";
+			//std::cout << "<i," << std::to_string(i) << ", value:" << values[i] << ">\n";
 		}
 	}	
 	soln->obj_value = _mip_cplex.getObjValue();

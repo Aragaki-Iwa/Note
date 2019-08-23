@@ -35,6 +35,7 @@ public:
 	
 	void init(CrewNetwork& crewNet, CrewRules& rules);
 	void search();
+	
 	//! 在挑选crewGroup的时候检查crew的工作状态
 	bool checkCrewStatus(const Opt_CREW& optCrew);
 
@@ -58,6 +59,7 @@ private:
 	//! 根据配比来搜索
 	//! 每种配比都搜索出一定数量的group
 	void searchAccordingCompoMode();
+
 
 	struct partialGroup
 	{

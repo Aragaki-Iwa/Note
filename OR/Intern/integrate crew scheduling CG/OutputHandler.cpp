@@ -7,7 +7,10 @@ void OutputHandler::writeSchedule(const Solution& soln, const SegNodeSet& curDay
 	
 	map<long long, int> seg_covered; //seg_id ±ªcover, ‘Úseg_covered[i]=1
 	for (size_t i = 0; i < curDaySegSet.size(); i++) {
-		seg_covered[curDaySegSet[i]->optSegment->getDBId()] = 0;
+		if (curDaySegSet[i]->nodeType == NodeType::seg && curDaySegSet[i]->optSegment->getAssigned()) {
+			seg_covered[curDaySegSet[i]->optSegment->getDBId()] = 1;
+		}
+		
 	}
 
 	for (int i = 0; i < scheduleHeader.size() - 1; i++) {
@@ -17,6 +20,10 @@ void OutputHandler::writeSchedule(const Solution& soln, const SegNodeSet& curDay
 
 	const ColumnPool& pool = soln.column_pool;
 	for (const auto& col : pool) {
+		if (col->type == ColumnType::relax) {
+			continue;
+		}
+
 		for (const auto& crew : col->_crewgroup->getCrewGroup()) {
 			outf << "Crew: " << crew->getIdCrew() << " "
 				<< "Rank: " << crew->getCurRank() << " "
@@ -39,9 +46,9 @@ void OutputHandler::writeSchedule(const Solution& soln, const SegNodeSet& curDay
 				<< "depArp: " << segnode->optSegment->getDepStation() << " "
 				<< "arvArp: " << segnode->optSegment->getArrStation() << "\n";
 
-			if (segnode->nodeType == NodeType::seg) {
+			/*if (segnode->nodeType == NodeType::seg) {
 				seg_covered[segnode->optSegment->getDBId()] = 1;
-			}
+			}*/
 		}
 		outf << "\n";
 	}
@@ -52,7 +59,7 @@ void OutputHandler::writeSchedule(const Solution& soln, const SegNodeSet& curDay
 	Opt_Segment* uncovered_seg;
 	for (size_t i = 0; i < seg_covered.size(); i++) {
 		uncovered_seg = curDaySegSet[i]->optSegment;
-		if (curDaySegSet[i]->nodeType == NodeType::seg && seg_covered[uncovered_seg->getDBId()] == 0) {
+		if (curDaySegSet[i]->nodeType == NodeType::seg && seg_covered[uncovered_seg->getDBId()] != 1) {
 			ss << "id: " << uncovered_seg->getDBId() << " "
 				<< "fltNum: " << uncovered_seg->getFlightNumber() << " "
 				<< "depDtLoc: " << utcToUtcString(uncovered_seg->getStartTimeLocSch()) << " "
@@ -81,6 +88,9 @@ void OutputHandler::writeCrewStatus(const Solution& soln, const std::string& sta
 	const ColumnPool& pool = soln.column_pool;
 	int id = 1;
 	for (const auto& col : pool) {
+		if (col->type == ColumnType::relax) {
+			continue;
+		}
 		outf << "----Group" << id++ << "\n";
 		for (const auto& crew : col->_crewgroup->getCrewGroup()) {
 			CrewStatus* crew_status = crew->workStatus;
@@ -91,8 +101,8 @@ void OutputHandler::writeCrewStatus(const Solution& soln, const std::string& sta
 
 			outf << to_string(crew_status->accumuFlyMin) << "^"
 				<< to_string(crew_status->accumuCreditMin) << "^"
-				<< to_string(crew_status->totalFlyMint) << "^"
-				<< to_string(crew_status->totalCreditMint) << "\n";
+				<< to_string(crew_status->sevenDayTotalFlyMint) << "^"
+				<< to_string(crew_status->wholePlanTotalCreditMint) << "\n";
 		}
 		
 	}
@@ -148,6 +158,58 @@ void OutputHandler::writeCrewStatus(const vector<Opt_CREW*>& crewSet, const char
 	}
 	ss << "\n";
 		
+	outf << ss.str();
+	outf.close();
+}
+
+void OutputHandler::writeCrewStatistic(const vector<Opt_CREW*>& crewSet, const char* statisticCsvFile) {	
+	ofstream outf;
+	outf.open(statisticCsvFile, std::ios::out);
+
+	for (int i = 0; i < crewStatisticHeaders.size() - 1; i++) {
+		outf << crewStatusHeader[i] << "^";
+	}
+	outf << crewStatusHeader.back() << "\n";
+	
+	CrewStatus* status;
+	for (const auto& crew : crewSet) {
+		status = crew->workStatus;
+		outf << crew->getIdCrew() << ","
+			<< crew->getCurRank() << ","
+			<< crew->getCurPosition() << ","
+			<< status->wholePlanTotalFlyMint << ","
+			<< status->wholePlanTotalCreditMint << "\n";
+	}
+
+	outf.close();
+}
+
+void OutputHandler::writeUncoveredFlight(const SegNodeSet& allSegNodeSet, const char* statisticFile) {
+	ofstream outf;
+	outf.open(statisticFile, std::ios::out);
+	
+	stringstream ss;
+	size_t num_uncovered_flight = 0;
+	Opt_Segment* seg;
+	for (const auto& seg_node : allSegNodeSet) {
+		seg = seg_node->optSegment;
+		if (seg_node->nodeType == NodeType::seg && seg->getAssigned() == false) {
+			ss << seg->getDBId() << "^"
+				<< seg->getTailNum() << "^"
+				<< utcToUtcDtString(seg->getStartTimeLocSch()) << "^"
+				<< utcToUtcDtString(seg->getEndTimeLocSch()) << "^"
+				<< seg->getDepStation() << "^"
+				<< seg->getArrStation() << "\n";
+
+			++num_uncovered_flight;
+		}
+	}
+
+	outf << "UNCOVERED FLIGHTS: " << num_uncovered_flight << "\n";
+	for (int i = 0; i < crewStatisticHeaders.size() - 1; i++) {
+		outf << crewStatusHeader[i] << "^";
+	}
+	outf << crewStatusHeader.back() << "\n";
 	outf << ss.str();
 	outf.close();
 }

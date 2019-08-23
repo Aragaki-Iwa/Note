@@ -53,7 +53,7 @@ private:
 	void clusterSegNode();
 	void setCurDayStartNodeSet(int curDay);
 	//! update status of optSeg and optCrew
-	void updateStatus(Solution& soln);
+	void updateStatus(const time_t startCurDay, Solution& soln);
 
 	InputHandler _inputHandler;
 	CrewRules* _rules;
@@ -73,10 +73,9 @@ private:
 	const int _SECONDS_ONE_DAY = 24 * 3600; //24 hour * 3600 secends
 	SegNodeSet* _cur_day_segnode_set;
 
-	//ColumnGeneration* _column_generation;
-	
+	// added-20190819
 
-
+	std::map<std::string, std::vector<CrewNode*>> _pos_crewnodes; //position-vector<CrewNode*>
 };
 
 #endif // !OPTIMIZER_H

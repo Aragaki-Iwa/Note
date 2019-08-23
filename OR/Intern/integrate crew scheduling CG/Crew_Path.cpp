@@ -38,9 +38,10 @@ void CrewGroup::setCrewIndexSet(/*const std::vector<Opt_CREW*>& optCrewSet*/) {
 }
 void CrewGroup::setBasicProperties() {	
 	auto first_status = _crewNodeSequence.front()->optCrew->workStatus;		
-	max_fly_mint = first_status->accumuFlyMin;
+	max_total_fly_mint = first_status->accumuFlyMin;
 	max_credit_mint =first_status->accumuCreditMin;	
 	endDtLoc = first_status->endDtLoc;
+	curStation = first_status->restStation;
 	std::string skill;
 	spetialCredentials[skill] = 1;
 	
@@ -50,14 +51,14 @@ void CrewGroup::setBasicProperties() {
 	for (const auto& crewnode : _crewNodeSequence) {	
 		spetialCredentials[skill] *= crewnode->optCrew->getSkillSet()[skill];
 		
-		auto temp_status = crewnode->optCrew->workStatus;
-		
+		auto temp_status = crewnode->optCrew->workStatus;		
 		time_t temp_end_loc = temp_status->endDtLoc;
 		endDtLoc = temp_end_loc > endDtLoc ? temp_end_loc : endDtLoc; //Group的endDtLoc == 其中包含的crew中最大的endDtLoc
-		
+		curStation = temp_status->restStation == "" ? curStation : temp_status->restStation;
+
 		int temp_fly_mint = temp_status->accumuFlyMin;
 		int temp_credit_mint = temp_status->accumuCreditMin;
-		max_fly_mint = temp_fly_mint > max_fly_mint ? temp_fly_mint : max_fly_mint;
+		max_total_fly_mint = temp_fly_mint > max_total_fly_mint ? temp_fly_mint : max_total_fly_mint;
 		max_credit_mint = temp_credit_mint > max_credit_mint ? temp_credit_mint : max_credit_mint;
 
 		//获取配比信息
